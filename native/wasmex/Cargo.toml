@@ -1,0 +1,25 @@
+[package]
+name = "wasmex"
+version = "0.7.0"
+authors = ["Philipp Tessenow <philipp@tessenow.org>"]
+description = "Elixir extension to run WebAssembly binaries"
+readme = "README.md"
+repository = "https://github.com/tessi/wasmex"
+keywords = ["elixir", "extension", "webassembly"]
+categories = ["wasm"]
+edition = "2018"
+
+[lib]
+name = "wasmex"
+path = "src/lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+rustler = "0.25.0"
+lazy_static = "1.4"
+wasmer = "2.2.1"
+wasmer-vm = "2.1.1"
+wasmer-wasi = "2.1.1"
+wasmtime = "0.35.3"
+serde = "1.0.136"
+typetag = "0.1.8"

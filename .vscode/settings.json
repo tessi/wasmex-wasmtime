@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+    "/home/tessi/dev/wasmex_wasmtime/native/wasmex/Cargo.toml"
+    ]
+}
