@@ -6,10 +6,10 @@ defmodule TestHelper do
   @wasi_test_source_dir "#{Path.dirname(__ENV__.file)}/wasi_test"
 
   def wasm_test_file_path,
-    do: "#{@wasm_test_source_dir}/target/wasm32-unknown-unknown/debug/wasmex_test.wasm"
+    do: "#{@wasm_test_source_dir}/target/wasm32-unknown-unknown/debug/wasmex_wasmtime_test.wasm"
 
   def wasm_import_test_file_path,
-    do: "#{@wasm_import_test_source_dir}/target/wasm32-unknown-unknown/debug/wasmex_test.wasm"
+    do: "#{@wasm_import_test_source_dir}/target/wasm32-unknown-unknown/debug/wasmex_wasmtime_test.wasm"
 
   def wasi_test_file_path,
     do: "#{@wasi_test_source_dir}/target/wasm32-wasi/debug/main.wasm"
@@ -22,15 +22,15 @@ defmodule TestHelper do
     # cache precompiled modules in an ETS so our tests can re-use them
     :ets.new(@ets_table, [:named_table, read_concurrency: true])
 
-    {:ok, wasm_module} = Wasmex.Module.compile(File.read!(TestHelper.wasm_test_file_path()))
+    {:ok, wasm_module} = WasmexWasmtime.Module.compile(File.read!(TestHelper.wasm_test_file_path()))
     :ets.insert(@ets_table, {:wasm, wasm_module})
 
     {:ok, wasm_import_module} =
-      Wasmex.Module.compile(File.read!(TestHelper.wasm_import_test_file_path()))
+      WasmexWasmtime.Module.compile(File.read!(TestHelper.wasm_import_test_file_path()))
 
     :ets.insert(@ets_table, {:wasm_import, wasm_import_module})
 
-    {:ok, wasi_module} = Wasmex.Module.compile(File.read!(TestHelper.wasi_test_file_path()))
+    {:ok, wasi_module} = WasmexWasmtime.Module.compile(File.read!(TestHelper.wasi_test_file_path()))
     :ets.insert(@ets_table, {:wasi, wasi_module})
   end
 

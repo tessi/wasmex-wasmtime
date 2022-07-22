@@ -1,16 +1,16 @@
 [package]
-name = "wasmex"
-version = "0.7.1"
+name = "wasmex_wasmtime"
+version = "0.1.0"
 authors = ["Philipp Tessenow <philipp@tessenow.org>"]
-description = "Elixir extension to run WebAssembly binaries"
+description = "Elixir extension to run WebAssembly binaries through wasmtime"
 readme = "README.md"
-repository = "https://github.com/tessi/wasmex"
-keywords = ["elixir", "extension", "webassembly"]
+repository = "https://github.com/tessi/wasmex-wasmtime"
+keywords = ["elixir", "extension", "webassembly", "wasmtime"]
 categories = ["wasm"]
-edition = "2018"
+edition = "2021"
 
 [lib]
-name = "wasmex"
+name = "wasmex_wasmtime"
 path = "src/lib.rs"
 crate-type = ["dylib"]
 

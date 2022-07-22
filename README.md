@@ -2,11 +2,11 @@
   <img width="300" src="./logo.svg" alt="Wasmex logo">
 </p>
 <p align="center">
-  <a href="https://github.com/tessi/wasmex/blob/master/LICENSE">
-    <img src="https://img.shields.io/github/license/tessi/wasmex.svg" alt="License">
+  <a href="https://github.com/tessi/wasmex-wasmtime/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/tessi/wasmex-wasmtime.svg" alt="License">
   </a>
-  <a href="https://github.com/tessi/wasmex/actions/workflows/elixir-ci.yaml">
-    <img src="https://github.com/tessi/wasmex/actions/workflows/elixir-ci.yaml/badge.svg?branch=main" alt="CI">
+  <a href="https://github.com/tessi/wasmex-wasmtime/actions/workflows/elixir-ci.yaml">
+    <img src="https://github.com/tessi/wasmex-wasmtime/actions/workflows/elixir-ci.yaml/badge.svg?branch=main" alt="CI">
   </a>
 </p>
 
@@ -18,18 +18,18 @@ We use [Rust](https://www.rust-lang.org/) to implement the NIF to make it as saf
 
 ## Install
 
-The package can be installed by adding `wasmex` to your list of
+The package can be installed by adding `wasmex_wasmtime` to your list of
 dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:wasmex, "~> 0.7.1"}
+    {:wasmex_wasmtime, "~> 0.7.1"}
   ]
 end
 ```
 
-The docs can be found at [https://hexdocs.pm/wasmex](https://hexdocs.pm/wasmex/Wasmex.html).
+The docs can be found at [https://hexdocs.pm/wasmex_wasmtime](https://hexdocs.pm/wasmex_wasmtime/Wasmex.html).
 
 ## Example
 
@@ -43,12 +43,12 @@ pub extern fn sum(x: i32, y: i32) -> i32 {
 }
 ```
 
-Once this program compiled to WebAssembly (which we do every time when running tests), we end up with a `wasmex_test.wasm` binary file.
+Once this program compiled to WebAssembly (which we do every time when running tests), we end up with a `wasmex_wasmtime_test.wasm` binary file.
 
 This WASM file can be executed in Elixir:
 
 ```elixir
-{:ok, bytes } = File.read("wasmex_test.wasm")
+{:ok, bytes } = File.read("wasmex_wasmtime_test.wasm")
 {:ok, module} = Wasmex.Module.compile(bytes)
 {:ok, instance } = Wasmex.start_link(%{module: module}) # starts a GenServer running this WASM instance
 
@@ -57,7 +57,7 @@ This WASM file can be executed in Elixir:
 
 ## Documentation
 
-Please visit the [`Wasmex documentation`](https://hexdocs.pm/wasmex/Wasmex.html) for further info.
+Please visit the [`Wasmex documentation`](https://hexdocs.pm/wasmex_wasmtime/Wasmex.html) for further info.
 If a topic is not covered (in the needed depth) there, please open an issue.
 
 ## What is WebAssembly?
@@ -110,4 +110,4 @@ Your contributions will be licenced under the same license as this project.
 
 ## License
 
-The entire project is under the MIT License. Please read [the`LICENSE` file](https://github.com/tessi/wasmex/blob/master/LICENSE).
+The entire project is under the MIT License. Please read [the`LICENSE` file](https://github.com/tessi/wasmex-wasmtime/blob/master/LICENSE).

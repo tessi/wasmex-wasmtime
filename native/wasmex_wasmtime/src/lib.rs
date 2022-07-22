@@ -15,7 +15,7 @@ extern crate rustler;
 use rustler::{Env, Term};
 
 rustler::init! {
-    "Elixir.Wasmex.Native",
+    "Elixir.WasmexWasmtime.Native",
     [
         instance::call_exported_function,
         instance::function_export_exists,

@@ -1,7 +1,7 @@
 name: Build precompiled NIFs
 
 env:
-  NIF_DIRECTORY: "native/wasmex"
+  NIF_DIRECTORY: "native/wasmex_wasmtime"
 
 on:
   push:
@@ -21,7 +21,7 @@ defaults:
     shell: bash
     # Sets the working dir for "run" scripts.
     # Note that this won't change the directory for actions (tasks with "uses").
-    working-directory: "./native/wasmex"
+    working-directory: "./native/wasmex_wasmtime"
 
 jobs:
   build_release:

@@ -1,4 +1,4 @@
-defmodule Wasmex.Pipe do
+defmodule WasmexWasmtime.Pipe do
   @moduledoc """
   A Pipe is a memory buffer that can be used in exchange for a WASM file.
   It can be used, for example, to capture stdout/stdin/stderr of a WASI program.
@@ -29,7 +29,7 @@ defmodule Wasmex.Pipe do
   """
   @spec create() :: {:error, reason :: binary()} | {:ok, __MODULE__.t()}
   def create() do
-    case Wasmex.Native.pipe_create() do
+    case WasmexWasmtime.Native.pipe_create() do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
@@ -40,7 +40,7 @@ defmodule Wasmex.Pipe do
   """
   @spec size(__MODULE__.t()) :: integer()
   def size(%__MODULE__{resource: resource}) do
-    Wasmex.Native.pipe_size(resource)
+    WasmexWasmtime.Native.pipe_size(resource)
   end
 
   @doc """
@@ -48,7 +48,7 @@ defmodule Wasmex.Pipe do
   """
   @spec set_len(__MODULE__.t(), integer()) :: :ok | :error
   def set_len(%__MODULE__{resource: resource}, len) do
-    Wasmex.Native.pipe_set_len(resource, len)
+    WasmexWasmtime.Native.pipe_set_len(resource, len)
   end
 
   @doc """
@@ -56,7 +56,7 @@ defmodule Wasmex.Pipe do
   """
   @spec read(__MODULE__.t()) :: binary()
   def read(%__MODULE__{resource: resource}) do
-    Wasmex.Native.pipe_read_binary(resource)
+    WasmexWasmtime.Native.pipe_read_binary(resource)
   end
 
   @doc """
@@ -64,6 +64,6 @@ defmodule Wasmex.Pipe do
   """
   @spec write(__MODULE__.t(), binary()) :: {:ok, integer()} | :error
   def write(%__MODULE__{resource: resource}, binary) do
-    Wasmex.Native.pipe_write_binary(resource, binary)
+    WasmexWasmtime.Native.pipe_write_binary(resource, binary)
   end
 end

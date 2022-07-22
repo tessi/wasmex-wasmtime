@@ -1,6 +1,6 @@
-defmodule Wasmex.ModuleTest do
+defmodule WasmexWasmtime.ModuleTest do
   use ExUnit.Case, async: true
-  doctest Wasmex.Module
+  doctest WasmexWasmtime.Module
 
   @wat """
   (module
@@ -14,9 +14,9 @@ defmodule Wasmex.ModuleTest do
 
   describe "module compilation from WAT" do
     test "instantiates a simple module from wat" do
-      {:ok, module} = Wasmex.Module.compile(@wat)
-      instance = start_supervised!({Wasmex, %{module: module}})
-      assert {:ok, [42]} == Wasmex.call_function(instance, :add_one, [41])
+      {:ok, module} = WasmexWasmtime.Module.compile(@wat)
+      instance = start_supervised!({WasmexWasmtime, %{module: module}})
+      assert {:ok, [42]} == WasmexWasmtime.call_function(instance, :add_one, [41])
     end
 
     test "errors when attempting to compile nonsense" do
@@ -24,32 +24,32 @@ defmodule Wasmex.ModuleTest do
 
       assert {:error,
               "Error while parsing bytes: expected `(`\n     --> <anon>:1:1\n      |\n    1 | wat is this? not WAT for sure\n      | ^."} ==
-               Wasmex.Module.compile(wat)
+               WasmexWasmtime.Module.compile(wat)
     end
   end
 
   describe "module de-/serialization" do
     test "a module can be serialized and deserialized again" do
       module = TestHelper.wasm_module()
-      {:ok, serialized} = Wasmex.Module.serialize(module)
-      {:ok, deserialized_module} = Wasmex.Module.unsafe_deserialize(serialized)
-      assert Wasmex.Module.exports(module) == Wasmex.Module.exports(deserialized_module)
+      {:ok, serialized} = WasmexWasmtime.Module.serialize(module)
+      {:ok, deserialized_module} = WasmexWasmtime.Module.unsafe_deserialize(serialized)
+      assert WasmexWasmtime.Module.exports(module) == WasmexWasmtime.Module.exports(deserialized_module)
     end
   end
 
   describe "name and set_name" do
     test "a modules name can be set and read out" do
-      {:ok, module} = Wasmex.Module.compile(@wat)
-      assert nil == Wasmex.Module.name(module)
-      :ok = Wasmex.Module.set_name(module, "test name")
-      assert "test name" == Wasmex.Module.name(module)
+      {:ok, module} = WasmexWasmtime.Module.compile(@wat)
+      assert nil == WasmexWasmtime.Module.name(module)
+      :ok = WasmexWasmtime.Module.set_name(module, "test name")
+      assert "test name" == WasmexWasmtime.Module.name(module)
     end
 
     test "setting the name of an instantiated module fails" do
-      {:ok, module} = Wasmex.Module.compile(@wat)
-      start_supervised!({Wasmex, %{module: module}})
+      {:ok, module} = WasmexWasmtime.Module.compile(@wat)
+      start_supervised!({WasmexWasmtime, %{module: module}})
       expected_error = {:error, "Could not change module name. Maybe it is already instantiated?"}
-      assert expected_error == Wasmex.Module.set_name(module, "test name")
+      assert expected_error == WasmexWasmtime.Module.set_name(module, "test name")
     end
   end
 
@@ -75,30 +75,30 @@ defmodule Wasmex.ModuleTest do
         "void" => {:fn, [], []}
       }
 
-      assert expected == Wasmex.Module.exports(module)
+      assert expected == WasmexWasmtime.Module.exports(module)
     end
 
     test "lists table data" do
-      {:ok, module} = Wasmex.Module.compile("(module (table (export \"myTable\") 2 anyfunc))")
+      {:ok, module} = WasmexWasmtime.Module.compile("(module (table (export \"myTable\") 2 anyfunc))")
       expected = %{"myTable" => {:table, %{minimum: 2, type: :func_ref}}}
-      assert expected == Wasmex.Module.exports(module)
+      assert expected == WasmexWasmtime.Module.exports(module)
     end
 
     test "lists function data" do
-      {:ok, module} = Wasmex.Module.compile("(module (func (export \"myFunction\")))")
+      {:ok, module} = WasmexWasmtime.Module.compile("(module (func (export \"myFunction\")))")
       expected = %{"myFunction" => {:fn, [], []}}
-      assert expected == Wasmex.Module.exports(module)
+      assert expected == WasmexWasmtime.Module.exports(module)
     end
 
     test "lists memory data" do
-      {:ok, module} = Wasmex.Module.compile("(module (memory (export \"myMemory\") 1))")
+      {:ok, module} = WasmexWasmtime.Module.compile("(module (memory (export \"myMemory\") 1))")
       expected = %{"myMemory" => {:memory, %{minimum: 1, shared: false}}}
-      assert expected == Wasmex.Module.exports(module)
+      assert expected == WasmexWasmtime.Module.exports(module)
     end
 
     test "lists no exports for the empty module" do
-      {:ok, module} = Wasmex.Module.compile("(module)")
-      assert %{} == Wasmex.Module.exports(module)
+      {:ok, module} = WasmexWasmtime.Module.compile("(module)")
+      assert %{} == WasmexWasmtime.Module.exports(module)
     end
   end
 
@@ -114,32 +114,32 @@ defmodule Wasmex.ModuleTest do
         }
       }
 
-      assert expected == Wasmex.Module.imports(module)
+      assert expected == WasmexWasmtime.Module.imports(module)
     end
 
     test "lists table data" do
       {:ok, module} =
-        Wasmex.Module.compile("(module (table (import \"env\" \"myTable\") 2 anyfunc))")
+        WasmexWasmtime.Module.compile("(module (table (import \"env\" \"myTable\") 2 anyfunc))")
 
       expected = %{"env" => %{"myTable" => {:table, %{minimum: 2, type: :func_ref}}}}
-      assert expected == Wasmex.Module.imports(module)
+      assert expected == WasmexWasmtime.Module.imports(module)
     end
 
     test "lists function data" do
-      {:ok, module} = Wasmex.Module.compile("(module (func (import \"env\" \"myFunction\")))")
+      {:ok, module} = WasmexWasmtime.Module.compile("(module (func (import \"env\" \"myFunction\")))")
       expected = %{"env" => %{"myFunction" => {:fn, [], []}}}
-      assert expected == Wasmex.Module.imports(module)
+      assert expected == WasmexWasmtime.Module.imports(module)
     end
 
     test "lists memory data" do
-      {:ok, module} = Wasmex.Module.compile("(module (memory (import \"env\" \"myMemory\") 1))")
+      {:ok, module} = WasmexWasmtime.Module.compile("(module (memory (import \"env\" \"myMemory\") 1))")
       expected = %{"env" => %{"myMemory" => {:memory, %{minimum: 1, shared: false}}}}
-      assert expected == Wasmex.Module.imports(module)
+      assert expected == WasmexWasmtime.Module.imports(module)
     end
 
     test "lists no imports for the empty module" do
-      {:ok, module} = Wasmex.Module.compile("(module)")
-      assert %{} == Wasmex.Module.imports(module)
+      {:ok, module} = WasmexWasmtime.Module.compile("(module)")
+      assert %{} == WasmexWasmtime.Module.imports(module)
     end
 
     test "groups imports by namespace" do
@@ -152,7 +152,7 @@ defmodule Wasmex.ModuleTest do
       )
       """
 
-      {:ok, module} = Wasmex.Module.compile(wat)
+      {:ok, module} = WasmexWasmtime.Module.compile(wat)
 
       expected = %{
         "env" => %{
@@ -165,7 +165,7 @@ defmodule Wasmex.ModuleTest do
         }
       }
 
-      assert expected == Wasmex.Module.imports(module)
+      assert expected == WasmexWasmtime.Module.imports(module)
     end
   end
 end

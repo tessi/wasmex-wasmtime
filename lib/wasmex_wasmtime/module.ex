@@ -1,15 +1,15 @@
-defmodule Wasmex.Module do
+defmodule WasmexWasmtime.Module do
   @moduledoc """
   A compiled WebAssembly module.
 
   A WebAssembly Module contains stateless WebAssembly code that has already been compiled and can be instantiated multiple times.
 
       # Read a WASM file and compile it into a WASM module
-      {:ok, bytes } = File.read("wasmex_test.wasm")
-      {:ok, module} = Wasmex.Module.compile(bytes)
+      {:ok, bytes } = File.read("wasmex_wasmtime_test.wasm")
+      {:ok, module} = WasmexWasmtime.Module.compile(bytes)
 
       # use the compiled module to start as many running instances as you want
-      {:ok, instance } = Wasmex.start_link(%{module: module})
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module})
   """
 
   @type t :: %__MODULE__{
@@ -29,14 +29,14 @@ defmodule Wasmex.Module do
   Compiles a WASM module from it's WASM (usually a .wasm file) or WAT (usually a .wat file)
   representation.
 
-  Compiled modules can be instantiated using `Wasmex.start_link/1`.
+  Compiled modules can be instantiated using `WasmexWasmtime.start_link/1`.
   Since module compilation takes time and resources but instantiation is comparatively cheap, it
   may be a good idea to compile a module once and instantiate it often if you want to
   run a WASM binary multiple times.
   """
   @spec compile(binary()) :: {:ok, __MODULE__.t()} | {:error, binary()}
   def compile(bytes) when is_binary(bytes) do
-    case Wasmex.Native.module_compile(bytes) do
+    case WasmexWasmtime.Native.module_compile(bytes) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
@@ -50,7 +50,7 @@ defmodule Wasmex.Module do
   """
   @spec name(__MODULE__.t()) :: binary() | nil
   def name(%__MODULE__{resource: resource}) do
-    case Wasmex.Native.module_name(resource) do
+    case WasmexWasmtime.Native.module_name(resource) do
       {:error, _} -> nil
       name -> name
     end
@@ -67,7 +67,7 @@ defmodule Wasmex.Module do
   """
   @spec set_name(__MODULE__.t(), binary()) :: :ok | {:error, binary()}
   def set_name(%__MODULE__{resource: resource}, name) when is_binary(name) do
-    Wasmex.Native.module_set_name(resource, name)
+    WasmexWasmtime.Native.module_set_name(resource, name)
   end
 
   @doc """
@@ -85,7 +85,7 @@ defmodule Wasmex.Module do
   """
   @spec exports(__MODULE__.t()) :: map()
   def exports(%__MODULE__{resource: resource}) do
-    Wasmex.Native.module_exports(resource)
+    WasmexWasmtime.Native.module_exports(resource)
   end
 
   @doc """
@@ -104,7 +104,7 @@ defmodule Wasmex.Module do
   """
   @spec imports(__MODULE__.t()) :: map()
   def imports(%__MODULE__{resource: resource}) do
-    Wasmex.Native.module_imports(resource)
+    WasmexWasmtime.Native.module_imports(resource)
   end
 
   @doc """
@@ -115,7 +115,7 @@ defmodule Wasmex.Module do
   """
   @spec serialize(__MODULE__.t()) :: {:ok, binary()} | {:error, binary()}
   def serialize(%__MODULE__{resource: resource}) do
-    case Wasmex.Native.module_serialize(resource) do
+    case WasmexWasmtime.Native.module_serialize(resource) do
       {:error, err} -> {:error, err}
       binary -> {:ok, binary}
     end
@@ -138,7 +138,7 @@ defmodule Wasmex.Module do
 
   @spec unsafe_deserialize(binary()) :: {:ok, __MODULE__.t()} | {:error, binary()}
   def unsafe_deserialize(bytes) when is_binary(bytes) do
-    case Wasmex.Native.module_unsafe_deserialize(bytes) do
+    case WasmexWasmtime.Native.module_unsafe_deserialize(bytes) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
@@ -152,10 +152,10 @@ defmodule Wasmex.Module do
   end
 end
 
-defimpl Inspect, for: Wasmex.Module do
+defimpl Inspect, for: WasmexWasmtime.Module do
   import Inspect.Algebra
 
   def inspect(dict, opts) do
-    concat(["#Wasmex.Module<", to_doc(dict.reference, opts), ">"])
+    concat(["#WasmexWasmtime.Module<", to_doc(dict.reference, opts), ">"])
   end
 end

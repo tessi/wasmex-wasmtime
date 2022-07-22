@@ -137,7 +137,7 @@ fn create_wasi_env<'a>(
     options: Term<'a>,
     env: RustlerEnv<'a>,
 ) -> Result<wasmer_wasi::WasiEnv, rustler::Error> {
-    let mut state_builder = WasiState::new("wasmex");
+    let mut state_builder = WasiState::new("wasmex_wasmtime");
     state_builder.args(wasi_args);
     for (key, value) in wasi_env {
         state_builder.env(key, value);

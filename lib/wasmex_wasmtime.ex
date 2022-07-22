@@ -1,6 +1,6 @@
-defmodule Wasmex do
+defmodule WasmexWasmtime do
   @moduledoc """
-  Wasmex is a fast and secure [WebAssembly](https://webassembly.org/) and [WASI](https://github.com/WebAssembly/WASI) runtime for Elixir.
+  WasmexWasmtime is a fast and secure [WebAssembly](https://webassembly.org/) and [WASI](https://github.com/WebAssembly/WASI) runtime for Elixir.
   It enables lightweight WebAssembly containers to be run in your Elixir backend.
 
   It uses [wasmer](https://wasmer.io/) to execute WASM binaries through a NIF. We use [Rust](https://www.rust-lang.org/) to implement the NIF to make it as safe as possible.
@@ -11,20 +11,20 @@ defmodule Wasmex do
   A compiled module can be instantiated which usually happens in a [GenServer](https://hexdocs.pm/elixir/master/GenServer.html).
   To start the GenServer, `start_link/1` is used - it receives a variety of configuration options including function imports and optional WASI runtime options.
 
-      {:ok, bytes } = File.read("wasmex_test.wasm")
-      {:ok, module} = Wasmex.Module.compile(bytes)
-      {:ok, instance } = Wasmex.start_link(%{module: module})
-      {:ok, [42]} == Wasmex.call_function(instance, "sum", [50, -8])
+      {:ok, bytes } = File.read("wasmex_wasmtime_test.wasm")
+      {:ok, module} = WasmexWasmtime.Module.compile(bytes)
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module})
+      {:ok, [42]} == WasmexWasmtime.call_function(instance, "sum", [50, -8])
 
-  Memory of a WASM instance can be read/written using `Wasmex.Memory`:
+  Memory of a WASM instance can be read/written using `WasmexWasmtime.Memory`:
 
       offset = 7
       index = 4
       value = 42
 
-      {:ok, memory} = Wasmex.Instance.memory(instance, :uint8, offset)
-      Wasmex.Memory.set(memory, index, value)
-      IO.puts Wasmex.Memory.get(memory, index) # 42
+      {:ok, memory} = WasmexWasmtime.Instance.memory(instance, :uint8, offset)
+      WasmexWasmtime.Memory.set(memory, index, value)
+      IO.puts WasmexWasmtime.Memory.get(memory, index) # 42
 
   See `start_link/1` for starting a WASM instance and `call_function/3` for details about calling WASM functions.
   """
@@ -35,10 +35,10 @@ defmodule Wasmex do
   @doc """
   Starts a GenServer which instantiates a WASM module from the given `.wasm` bytes.
 
-      {:ok, bytes } = File.read("wasmex_test.wasm")
-      {:ok, module} = Wasmex.Module.compile(bytes)
-      {:ok, instance } = Wasmex.start_link(%{module: module})
-      {:ok, [42]} == Wasmex.call_function(instance, "sum", [50, -8])
+      {:ok, bytes } = File.read("wasmex_wasmtime_test.wasm")
+      {:ok, module} = WasmexWasmtime.Module.compile(bytes)
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module})
+      {:ok, [42]} == WasmexWasmtime.call_function(instance, "sum", [50, -8])
 
   ### Imports
 
@@ -49,8 +49,8 @@ defmodule Wasmex do
           sum3: {:fn, [:i32, :i32, :i32], [:i32], fn (_context, a, b, c) -> a + b + c end},
         }
       }
-      instance = Wasmex.start_link(%{module: module, imports: imports})
-      {:ok, [6]} = Wasmex.call_function(instance, "use_the_imported_sum_fn", [1, 2, 3])
+      instance = WasmexWasmtime.start_link(%{module: module, imports: imports})
+      {:ok, [6]} = WasmexWasmtime.call_function(instance, "use_the_imported_sum_fn", [1, 2, 3])
 
   In the example above, we import the `"env"` namespace.
   Each namespace is a map listing imports, e.g. the `sum3` function, which is represented with a tuple of:
@@ -77,7 +77,7 @@ defmodule Wasmex do
   Optionally, modules can be run with WebAssembly System Interface (WASI) support.
   WASI functions are provided as native NIF functions by default.
 
-      {:ok, instance } = Wasmex.start_link(%{module: module, wasi: true})
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module, wasi: true})
 
   It is possible to overwrite the default WASI functions using the imports map as described above.
 
@@ -93,7 +93,7 @@ defmodule Wasmex do
         },
         preopen: %{"wasi_logfiles": %{flags: [:write, :create], alias: "log"}}
       }
-      {:ok, instance } = Wasmex.start_link(%{module: module, wasi: wasi})
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module, wasi: wasi})
 
   The `preopen` map takes directory paths as keys and settings map as values.
   Settings must specify the access map with one or more of `:create`, `:read`, `:write`.
@@ -101,18 +101,18 @@ defmodule Wasmex do
 
   It is also possible to capture stdout, stdin, or stderr of a WASI program using pipes:
 
-      {:ok, stdin} = Wasmex.Pipe.create()
-      {:ok, stdout} = Wasmex.Pipe.create()
-      {:ok, stderr} = Wasmex.Pipe.create()
+      {:ok, stdin} = WasmexWasmtime.Pipe.create()
+      {:ok, stdout} = WasmexWasmtime.Pipe.create()
+      {:ok, stderr} = WasmexWasmtime.Pipe.create()
       wasi = %{
         stdin: stdin,
         stdout: stdout,
         stderr: stderr
       }
-      {:ok, instance } = Wasmex.start_link(%{module: module, wasi: wasi})
-      Wasmex.Pipe.write(stdin, "Hey! It compiles! Ship it!")
-      {:ok, _} = Wasmex.call_function(instance, :_start, [])
-      Wasmex.Pipe.read(stdout)
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module, wasi: wasi})
+      WasmexWasmtime.Pipe.write(stdin, "Hey! It compiles! Ship it!")
+      {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+      WasmexWasmtime.Pipe.read(stdout)
   """
   def start_link(%{} = opts) when not is_map_key(opts, :imports),
     do: start_link(Map.merge(opts, %{imports: %{}}))
@@ -120,7 +120,7 @@ defmodule Wasmex do
   def start_link(%{wasi: true} = opts), do: start_link(Map.merge(opts, %{wasi: %{}}))
 
   def start_link(%{bytes: bytes} = opts) do
-    with {:ok, module} <- Wasmex.Module.compile(bytes) do
+    with {:ok, module} <- WasmexWasmtime.Module.compile(bytes) do
       opts
       |> Map.delete(:bytes)
       |> Map.put(:module, module)
@@ -176,14 +176,14 @@ defmodule Wasmex do
   Let's see how we can call this function from Elixir:
 
   ```elixir
-  {:ok, instance} = Wasmex.start_link(%{module: module})
-  {:ok, memory} = Wasmex.memory(instance, :uint8, 0)
+  {:ok, instance} = WasmexWasmtime.start_link(%{module: module})
+  {:ok, memory} = WasmexWasmtime.memory(instance, :uint8, 0)
   index = 42
   string = "hello, world"
-  Wasmex.Memory.write_binary(memory, index, string)
+  WasmexWasmtime.Memory.write_binary(memory, index, string)
 
   # 104 is the letter "h" in ASCII/UTF-8 encoding
-  {:ok, [104]} == Wasmex.call_function(instance, "string_first_byte", [index, String.length(string)])
+  {:ok, [104]} == WasmexWasmtime.call_function(instance, "string_first_byte", [index, String.length(string)])
   ```
 
   Please not that Elixir and Rust assume Strings to be valid UTF-8. Take care when handling other encodings.
@@ -205,17 +205,17 @@ defmodule Wasmex do
   This is how we would receive this String in Elixir:
 
   ```elixir
-  {:ok, instance} = Wasmex.start_link(%{module: module})
-  {:ok, memory} = Wasmex.memory(instance, :uint8, 0)
+  {:ok, instance} = WasmexWasmtime.start_link(%{module: module})
+  {:ok, memory} = WasmexWasmtime.memory(instance, :uint8, 0)
 
-  {:ok, [pointer]} = Wasmex.call_function(instance, "string", [])
-  returned_string = Wasmex.Memory.read_string(memory, pointer, 13) # "Hello, World!"
+  {:ok, [pointer]} = WasmexWasmtime.call_function(instance, "string", [])
+  returned_string = WasmexWasmtime.Memory.read_string(memory, pointer, 13) # "Hello, World!"
   ```
 
   #### Specifying a timeout
   The default timeout for `call_function` is 5 seconds, or 5000 milliseconds. If you're calling a long-running function, you can specify a timeout value (in milliseconds) for this call. Using the above example as a starting point, calling a function with a timeout of 10 seconds looks like:
   ```elixir
-  {:ok, [pointer]} = Wasmex.call_function(instance, "string", [], 10000)
+  {:ok, [pointer]} = WasmexWasmtime.call_function(instance, "string", [], 10000)
   ```
   """
   def call_function(pid, name, params, timeout \\ 5000) do
@@ -223,7 +223,7 @@ defmodule Wasmex do
   end
 
   @doc """
-  Finds the exported memory of the given WASM instance and returns it as a `Wasmex.Memory`.
+  Finds the exported memory of the given WASM instance and returns it as a `WasmexWasmtime.Memory`.
 
   The memory is a collection of bytes which can be viewed and interpreted as a sequence of different
   (data-)`types`:
@@ -255,7 +255,7 @@ defmodule Wasmex do
   @doc """
   Params:
 
-  * module (Wasmex.Module): the compiled WASM module
+  * module (WasmexWasmtime.Module): the compiled WASM module
   * imports (map): a map defining imports. Structure is:
                    %{
                      namespace_name: %{
@@ -276,7 +276,7 @@ defmodule Wasmex do
   @impl true
   def init(%{module: module, imports: imports, wasi: wasi})
       when is_map(imports) and is_map(wasi) do
-    case Wasmex.Instance.new_wasi(module, imports, wasi) do
+    case WasmexWasmtime.Instance.new_wasi(module, imports, wasi) do
       {:ok, instance} -> {:ok, %{instance: instance, imports: imports, wasi: wasi}}
       {:error, reason} -> {:error, reason}
     end
@@ -284,7 +284,7 @@ defmodule Wasmex do
 
   @impl true
   def init(%{module: module, imports: imports}) when is_map(imports) do
-    case Wasmex.Instance.new(module, imports) do
+    case WasmexWasmtime.Instance.new(module, imports) do
       {:ok, instance} -> {:ok, %{instance: instance, imports: imports}}
       {:error, reason} -> {:error, reason}
     end
@@ -293,7 +293,7 @@ defmodule Wasmex do
   @impl true
   def handle_call({:memory, size, offset}, _from, %{instance: instance} = state)
       when size in [:uint8, :int8, :uint16, :int16, :uint32, :int32] do
-    case Wasmex.Memory.from_instance(instance, size, offset) do
+    case WasmexWasmtime.Memory.from_instance(instance, size, offset) do
       {:ok, memory} -> {:reply, {:ok, memory}, state}
       {:error, error} -> {:reply, {:error, error}, state}
     end
@@ -302,12 +302,12 @@ defmodule Wasmex do
   @impl true
   def handle_call({:exported_function_exists, name}, _from, %{instance: instance} = state)
       when is_binary(name) do
-    {:reply, Wasmex.Instance.function_export_exists(instance, name), state}
+    {:reply, WasmexWasmtime.Instance.function_export_exists(instance, name), state}
   end
 
   @impl true
   def handle_call({:call_function, name, params}, from, %{instance: instance} = state) do
-    :ok = Wasmex.Instance.call_exported_function(instance, name, params, from)
+    :ok = WasmexWasmtime.Instance.call_exported_function(instance, name, params, from)
     {:noreply, state}
   end
 
@@ -326,7 +326,7 @@ defmodule Wasmex do
       Map.put(
         context,
         :memory,
-        Wasmex.Memory.wrap_resource(Map.get(context, :memory), :uint8, 0)
+        WasmexWasmtime.Memory.wrap_resource(Map.get(context, :memory), :uint8, 0)
       )
 
     {success, return_value} =
@@ -347,7 +347,7 @@ defmodule Wasmex do
         _ -> [return_value]
       end
 
-    :ok = Wasmex.Native.namespace_receive_callback_result(token, success, return_values)
+    :ok = WasmexWasmtime.Native.namespace_receive_callback_result(token, success, return_values)
     {:noreply, state}
   end
 end

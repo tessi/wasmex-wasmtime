@@ -93,7 +93,7 @@ impl Environment {
     // 1. the rust wrapper we define here is called
     // 2. it creates a callback token containing a Mutex for storing the call result and a Condvar
     // 3. the rust wrapper sends an :invoke_callback message to elixir containing the token and call params
-    // 4. the Wasmex module receive that call in elixir-land and executes the actual elixir callback
+    // 4. the WasmexWasmtime module receive that call in elixir-land and executes the actual elixir callback
     // 5. after the callback finished execution, return values are send back to Rust via `receive_callback_result`
     // 6. `receive_callback_result` saves the return values in the callback tokens mutex and signals the condvar,
     //    so that the original wrapper function can continue code execution

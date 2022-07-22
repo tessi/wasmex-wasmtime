@@ -1,4 +1,4 @@
-defmodule Wasmex.CallbackToken do
+defmodule WasmexWasmtime.CallbackToken do
   @moduledoc false
 
   @type t :: %__MODULE__{
@@ -22,10 +22,10 @@ defmodule Wasmex.CallbackToken do
   end
 end
 
-defimpl Inspect, for: Wasmex.CallbackToken do
+defimpl Inspect, for: WasmexWasmtime.CallbackToken do
   import Inspect.Algebra
 
   def inspect(dict, opts) do
-    concat(["#Wasmex.CallbackToken<", to_doc(dict.reference, opts), ">"])
+    concat(["#WasmexWasmtime.CallbackToken<", to_doc(dict.reference, opts), ">"])
   end
 end

@@ -8,7 +8,7 @@ on:
 
 defaults:
   run:
-    working-directory: ./native/wasmex/
+    working-directory: ./native/wasmex_wasmtime/
 
 jobs:
   lint:

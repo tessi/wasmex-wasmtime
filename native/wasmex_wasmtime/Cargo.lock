@@ -1516,8 +1516,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmex"
-version = "0.7.1"
+name = "wasmex_wasmtime"
+version = "0.1.0"
 dependencies = [
  "lazy_static",
  "rustler",

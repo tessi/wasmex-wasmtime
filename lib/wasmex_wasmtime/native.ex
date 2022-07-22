@@ -1,4 +1,4 @@
-defmodule Wasmex.Native do
+defmodule WasmexWasmtime.Native do
   @moduledoc false
 
   mix_config = Mix.Project.config()
@@ -6,10 +6,10 @@ defmodule Wasmex.Native do
   github_url = mix_config[:package][:links]["GitHub"]
 
   use RustlerPrecompiled,
-    otp_app: :wasmex,
+    otp_app: :wasmex_wasmtime,
     base_url: "#{github_url}/releases/download/v#{version}",
     version: version,
-    force_build: System.get_env("WASMEX_BUILD") in ["1", "true"]
+    force_build: System.get_env("WASMEX_WASMTIME_BUILD") in ["1", "true"]
 
   def module_compile(_bytes), do: error()
   def module_exports(_module_resource), do: error()

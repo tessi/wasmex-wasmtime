@@ -1,16 +1,16 @@
-defmodule Wasmex.Instance do
+defmodule WasmexWasmtime.Instance do
   @moduledoc """
   Instantiates a WebAssembly module and allows calling exported functions on it.
 
       # Read a WASM file and compile it into a WASM module
-      {:ok, bytes } = File.read("wasmex_test.wasm")
-      {:ok, module} = Wasmex.Module.compile(bytes)
+      {:ok, bytes } = File.read("wasmex_wasmtime_test.wasm")
+      {:ok, module} = WasmexWasmtime.Module.compile(bytes)
 
       # Instantiates the WASM module.
-      {:ok, instance } = Wasmex.start_link(%{module: module})
+      {:ok, instance } = WasmexWasmtime.start_link(%{module: module})
 
       # Call a function on it.
-      {:ok, [result]} = Wasmex.call_function(instance, "sum", [1, 2])
+      {:ok, [result]} = WasmexWasmtime.call_function(instance, "sum", [1, 2])
 
       IO.puts result # 3
 
@@ -18,14 +18,14 @@ defmodule Wasmex.Instance do
   Arguments of these functions are automatically casted to WebAssembly values.
   Note that WebAssembly only knows number datatypes (floats and integers of various sizes).
 
-  You can pass arbitrary data to WebAssembly by writing data into an instances memory. The `memory/3` function returns a `Wasmex.Memory` struct representing the memory of an instance, e.g.:
+  You can pass arbitrary data to WebAssembly by writing data into an instances memory. The `memory/3` function returns a `WasmexWasmtime.Memory` struct representing the memory of an instance, e.g.:
 
   ```elixir
-  {:ok, memory} = Wasmex.Instance.memory(instance, :uint8, 0)
+  {:ok, memory} = WasmexWasmtime.Instance.memory(instance, :uint8, 0)
   ```
 
   This module, especially `call_exported_function/4`, is assumed to be called within a GenServer context.
-  Usually, functions definedd here are called through the `Wasmex` module API to satisfy this assumption.
+  Usually, functions definedd here are called through the `WasmexWasmtime` module API to satisfy this assumption.
   """
 
   @type t :: %__MODULE__{
@@ -41,56 +41,56 @@ defmodule Wasmex.Instance do
             # accidentally do.
             reference: nil
 
-  @deprecated "Compile the module with Wasmex.Module.compile/1 and then use new/2 instead"
+  @deprecated "Compile the module with WasmexWasmtime.Module.compile/1 and then use new/2 instead"
   @spec from_bytes(binary(), %{optional(binary()) => (... -> any())}) ::
           {:ok, __MODULE__.t()} | {:error, binary()}
   def from_bytes(bytes, imports) do
-    case Wasmex.Module.compile(bytes) do
+    case WasmexWasmtime.Module.compile(bytes) do
       {:ok, module} -> new(module, imports)
       error -> error
     end
   end
 
-  @spec new(Wasmex.Module.t(), %{optional(binary()) => (... -> any())}) ::
+  @spec new(WasmexWasmtime.Module.t(), %{optional(binary()) => (... -> any())}) ::
           {:ok, __MODULE__.t()} | {:error, binary()}
-  def new(%Wasmex.Module{resource: memory_resource}, imports) when is_map(imports) do
-    case Wasmex.Native.instance_new(memory_resource, imports) do
+  def new(%WasmexWasmtime.Module{resource: memory_resource}, imports) when is_map(imports) do
+    case WasmexWasmtime.Native.instance_new(memory_resource, imports) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
   end
 
-  @deprecated "Compile the module with Wasmex.Module.compile/1 and then use new_wasi/3 instead"
+  @deprecated "Compile the module with WasmexWasmtime.Module.compile/1 and then use new_wasi/3 instead"
   @spec wasi_from_bytes(binary(), %{optional(binary()) => (... -> any())}, %{
           optional(:args) => [String.t()],
           optional(:env) => %{String.t() => String.t()},
-          optional(:stdin) => Wasmex.Pipe.t(),
-          optional(:stdout) => Wasmex.Pipe.t(),
-          optional(:stderr) => Wasmex.Pipe.t()
+          optional(:stdin) => WasmexWasmtime.Pipe.t(),
+          optional(:stdout) => WasmexWasmtime.Pipe.t(),
+          optional(:stderr) => WasmexWasmtime.Pipe.t()
         }) ::
           {:ok, __MODULE__.t()} | {:error, binary()}
   def wasi_from_bytes(bytes, imports, wasi) do
-    case Wasmex.Module.compile(bytes) do
+    case WasmexWasmtime.Module.compile(bytes) do
       {:ok, module} -> new_wasi(module, imports, wasi)
       error -> error
     end
   end
 
-  @spec new_wasi(Wasmex.Module.t(), %{optional(binary()) => (... -> any())}, %{
+  @spec new_wasi(WasmexWasmtime.Module.t(), %{optional(binary()) => (... -> any())}, %{
           optional(:args) => [String.t()],
           optional(:env) => %{String.t() => String.t()},
-          optional(:stdin) => Wasmex.Pipe.t(),
-          optional(:stdout) => Wasmex.Pipe.t(),
-          optional(:stderr) => Wasmex.Pipe.t()
+          optional(:stdin) => WasmexWasmtime.Pipe.t(),
+          optional(:stdout) => WasmexWasmtime.Pipe.t(),
+          optional(:stderr) => WasmexWasmtime.Pipe.t()
         }) ::
           {:ok, __MODULE__.t()} | {:error, binary()}
-  def new_wasi(%Wasmex.Module{resource: memory_resource}, imports, wasi)
+  def new_wasi(%WasmexWasmtime.Module{resource: memory_resource}, imports, wasi)
       when is_map(imports) and is_map(wasi) do
     args = Map.get(wasi, "args", [])
     env = Map.get(wasi, "env", %{})
     {opts, _} = Map.split(wasi, ["stdin", "stdout", "stderr", "preopen"])
 
-    case Wasmex.Native.instance_new_wasi(memory_resource, imports, args, env, opts) do
+    case WasmexWasmtime.Native.instance_new_wasi(memory_resource, imports, args, env, opts) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
@@ -105,7 +105,7 @@ defmodule Wasmex.Instance do
 
   @spec function_export_exists(__MODULE__.t(), binary()) :: boolean()
   def function_export_exists(%__MODULE__{resource: resource}, name) when is_binary(name) do
-    Wasmex.Native.instance_function_export_exists(resource, name)
+    WasmexWasmtime.Native.instance_function_export_exists(resource, name)
   end
 
   @doc """
@@ -124,21 +124,21 @@ defmodule Wasmex.Instance do
           :ok | {:error, binary()}
   def call_exported_function(%__MODULE__{resource: resource}, name, params, from)
       when is_binary(name) do
-    Wasmex.Native.instance_call_exported_function(resource, name, params, from)
+    WasmexWasmtime.Native.instance_call_exported_function(resource, name, params, from)
   end
 
   @spec memory(__MODULE__.t(), atom(), pos_integer()) ::
-          {:ok, Wasmex.Memory.t()} | {:error, binary()}
+          {:ok, WasmexWasmtime.Memory.t()} | {:error, binary()}
   def memory(%__MODULE__{} = instance, size, offset)
       when size in [:uint8, :int8, :uint16, :int16, :uint32, :int32] do
-    Wasmex.Memory.from_instance(instance, size, offset)
+    WasmexWasmtime.Memory.from_instance(instance, size, offset)
   end
 end
 
-defimpl Inspect, for: Wasmex.Instance do
+defimpl Inspect, for: WasmexWasmtime.Instance do
   import Inspect.Algebra
 
   def inspect(dict, opts) do
-    concat(["#Wasmex.Instance<", to_doc(dict.reference, opts), ">"])
+    concat(["#WasmexWasmtime.Instance<", to_doc(dict.reference, opts), ">"])
   end
 end

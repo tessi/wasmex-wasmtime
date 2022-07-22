@@ -1,6 +1,6 @@
 defmodule WasiTest do
   use ExUnit.Case, async: true
-  doctest Wasmex
+  doctest WasmexWasmtime
 
   def tmp_file_path(suffix) do
     dir = System.tmp_dir!()
@@ -20,7 +20,7 @@ defmodule WasiTest do
             {{:bad_return_value, {:error, "Could not create import object: UnknownWasiVersion"}},
              _}} =
              start_supervised(
-               {Wasmex, %{module: TestHelper.wasm_module(), imports: %{}, wasi: true}}
+               {WasmexWasmtime, %{module: TestHelper.wasm_module(), imports: %{}, wasi: true}}
              )
   end
 
@@ -33,24 +33,24 @@ defmodule WasiTest do
              # writes a time struct into memory representing 42 seconds since the epoch
 
              # 64-bit tv_sec
-             Wasmex.Memory.set(memory, time_ptr + 0, 0)
-             Wasmex.Memory.set(memory, time_ptr + 1, 0)
-             Wasmex.Memory.set(memory, time_ptr + 2, 0)
-             Wasmex.Memory.set(memory, time_ptr + 3, 0)
-             Wasmex.Memory.set(memory, time_ptr + 4, 10)
-             Wasmex.Memory.set(memory, time_ptr + 5, 0)
-             Wasmex.Memory.set(memory, time_ptr + 6, 0)
-             Wasmex.Memory.set(memory, time_ptr + 7, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 0, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 1, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 2, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 3, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 4, 10)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 5, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 6, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 7, 0)
 
              # 64-bit n_sec
-             Wasmex.Memory.set(memory, time_ptr + 8, 0)
-             Wasmex.Memory.set(memory, time_ptr + 9, 0)
-             Wasmex.Memory.set(memory, time_ptr + 10, 0)
-             Wasmex.Memory.set(memory, time_ptr + 11, 0)
-             Wasmex.Memory.set(memory, time_ptr + 12, 0)
-             Wasmex.Memory.set(memory, time_ptr + 13, 0)
-             Wasmex.Memory.set(memory, time_ptr + 14, 0)
-             Wasmex.Memory.set(memory, time_ptr + 15, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 8, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 9, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 10, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 11, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 12, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 13, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 14, 0)
+             WasmexWasmtime.Memory.set(memory, time_ptr + 15, 0)
 
              0
            end},
@@ -58,18 +58,18 @@ defmodule WasiTest do
           {:fn, [:i32, :i32], [:i32],
            fn %{memory: memory}, address, size ->
              Enum.each(0..size, fn index ->
-               Wasmex.Memory.set(memory, address + index, 0)
+               WasmexWasmtime.Memory.set(memory, address + index, 0)
              end)
 
              # randomly selected `4` with a fair dice roll
-             Wasmex.Memory.set(memory, address, 4)
+             WasmexWasmtime.Memory.set(memory, address, 4)
 
              0
            end}
       }
     }
 
-    {:ok, pipe} = Wasmex.Pipe.create()
+    {:ok, pipe} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["hello", "from elixir"],
@@ -84,17 +84,17 @@ defmodule WasiTest do
 
     instance =
       start_supervised!(
-        {Wasmex, %{module: TestHelper.wasi_module(), imports: imports, wasi: wasi}}
+        {WasmexWasmtime, %{module: TestHelper.wasi_module(), imports: imports, wasi: wasi}}
       )
 
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
-    assert Wasmex.Pipe.read(pipe) ==
+    assert WasmexWasmtime.Pipe.read(pipe) ==
              """
              Hello from the WASI test program!
 
              Arguments:
-             wasmex
+             wasmex_wasmtime
              hello
              from elixir
 
@@ -111,16 +111,16 @@ defmodule WasiTest do
   end
 
   test "file system access without preopened dirs" do
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
     wasi = %{args: ["list_files", "src"], stdout: stdout}
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
-    assert Wasmex.Pipe.read(stdout) == "Could not find directory src\n"
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+    assert WasmexWasmtime.Pipe.read(stdout) == "Could not find directory src\n"
   end
 
   test "list files on a preopened dir" do
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["list_files", "test/wasi_test/src"],
@@ -128,14 +128,14 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:read]}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
-    assert Wasmex.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+    assert WasmexWasmtime.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
   end
 
   test "list files on a preopened dir with alias" do
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["list_files", "aliased_src"],
@@ -143,14 +143,14 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:read], alias: "aliased_src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
-    assert Wasmex.Pipe.read(stdout) == "\"aliased_src/main.rs\"\n"
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+    assert WasmexWasmtime.Pipe.read(stdout) == "\"aliased_src/main.rs\"\n"
   end
 
   test "read a file on a preopened dir" do
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["read_file", "src/main.rs"],
@@ -158,15 +158,15 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:read], alias: "src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     {:ok, expected_content} = File.read("test/wasi_test/src/main.rs")
-    assert Wasmex.Pipe.read(stdout) == expected_content <> "\n"
+    assert WasmexWasmtime.Pipe.read(stdout) == expected_content <> "\n"
   end
 
   test "attempt to read a file without read permission" do
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["read_file", "src/main.rs"],
@@ -174,11 +174,11 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:create], alias: "src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
-    assert Wasmex.Pipe.read(stdout) ==
+    assert WasmexWasmtime.Pipe.read(stdout) ==
              "error: could not read file (Os { code: 2, kind: PermissionDenied, message: \"Permission denied\" })\n"
   end
 
@@ -186,7 +186,7 @@ defmodule WasiTest do
     {dir, filename, filepath} = tmp_file_path("write_file")
     File.write!(filepath, "existing content\n")
 
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["write_file", "src/#{filename}"],
@@ -194,12 +194,12 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:write], alias: "src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
     assert "Hello, updated world!" == file_contents
-    assert Wasmex.Pipe.read(stdout) == ""
+    assert WasmexWasmtime.Pipe.read(stdout) == ""
     File.rm!(filepath)
   end
 
@@ -207,7 +207,7 @@ defmodule WasiTest do
     {dir, filename, filepath} = tmp_file_path("write_file_no_permission")
     File.write!(filepath, "existing content\n")
 
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["write_file", "src/#{filename}"],
@@ -215,13 +215,13 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:read], alias: "src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
     assert "existing content\n" == file_contents
 
-    assert Wasmex.Pipe.read(stdout) ==
+    assert WasmexWasmtime.Pipe.read(stdout) ==
              "error: could not write file (Os { code: 2, kind: PermissionDenied, message: \"Permission denied\" })\n"
 
     File.rm!(filepath)
@@ -230,7 +230,7 @@ defmodule WasiTest do
   test "create a file on a preopened dir" do
     {dir, filename, filepath} = tmp_file_path("create_file")
 
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["create_file", "src/#{filename}"],
@@ -238,19 +238,19 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:create], alias: "src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
     assert "Hello, created world!" == file_contents
-    assert Wasmex.Pipe.read(stdout) == ""
+    assert WasmexWasmtime.Pipe.read(stdout) == ""
     File.rm!(filepath)
   end
 
   test "create a file on a preopened dir without permission" do
     {dir, filename, filepath} = tmp_file_path("create_file")
 
-    {:ok, stdout} = Wasmex.Pipe.create()
+    {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
       args: ["create_file", "src/#{filename}"],
@@ -258,13 +258,13 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:read], alias: "src"}}
     }
 
-    instance = start_supervised!({Wasmex, %{module: TestHelper.wasi_module(), wasi: wasi}})
-    {:ok, _} = Wasmex.call_function(instance, :_start, [])
+    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
     assert "" == file_contents
 
-    assert Wasmex.Pipe.read(stdout) ==
+    assert WasmexWasmtime.Pipe.read(stdout) ==
              "error: could not write file (Os { code: 2, kind: PermissionDenied, message: \"Permission denied\" })\n"
 
     File.rm!(filepath)

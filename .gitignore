@@ -20,14 +20,15 @@ erl_crash.dump
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-wasmex-*.tar
+wasmex_wasmtime-*.tar
 
 # Cargo things in the Rust part of this package
-priv/native/libwasmex.so
+priv/native/libwasmex_wasmtime.so
 test/wasm_source/target/*
 
 .mix_tasks
 **/.DS_Store
+.elixir_ls
 
 # Wapm test files
 wapm_packages/*

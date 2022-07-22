@@ -9,7 +9,7 @@ updates:
   reviewers:
   - tessi
 - package-ecosystem: cargo
-  directory: "/native/wasmex"
+  directory: "/native/wasmex_wasmtime"
   schedule:
     interval: daily
     time: "04:00"

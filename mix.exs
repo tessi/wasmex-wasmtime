@@ -1,15 +1,15 @@
-defmodule Wasmex.MixProject do
+defmodule WasmexWasmtime.MixProject do
   use Mix.Project
 
-  @version "0.7.1"
+  @version "0.1.0-dev"
 
   def project do
     [
-      app: :wasmex,
+      app: :wasmex_wasmtime,
       version: @version,
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
-      name: "Wasmex",
+      name: "wasmex_wasmtime",
       description: description(),
       package: package(),
       deps: deps(),
@@ -38,7 +38,7 @@ defmodule Wasmex.MixProject do
   end
 
   defp description() do
-    "Wasmex is an Elixir library for executing WebAssembly binaries."
+    "wasmex_wasmtime is an Elixir library for executing WebAssembly binaries with wasmtime"
   end
 
   defp package() do
@@ -46,11 +46,11 @@ defmodule Wasmex.MixProject do
       # These are the default files included in the package
       files: ~w[
         lib
-        native/wasmex/src
-        native/wasmex/Cargo.*
-        native/wasmex/README.md
-        native/wasmex/.cargo
-        checksum-Elixir.Wasmex.Native.exs
+        native/wasmex_wasmtime/src
+        native/wasmex_wasmtime/Cargo.*
+        native/wasmex_wasmtime/README.md
+        native/wasmex_wasmtime/.cargo
+        checksum-Elixir.WasmexWasmtime.Native.exs
         .formatter.exs
         mix.exs
         README.md
@@ -59,10 +59,10 @@ defmodule Wasmex.MixProject do
         ],
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/tessi/wasmex",
-        "Docs" => "https://hexdocs.pm/wasmex"
+        "GitHub" => "https://github.com/tessi/wasmex-wasmtime",
+        "Docs" => "https://hexdocs.pm/wasmex_wasmtime"
       },
-      source_url: "https://github.com/tessi/wasmex"
+      source_url: "https://github.com/tessi/wasmex-wasmtime"
     ]
   end
 end
