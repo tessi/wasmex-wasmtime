@@ -6,18 +6,19 @@ use rustler::{
     types::ListIterator,
     Encoder, Env as RustlerEnv, Error, MapIterator, NifResult, Term,
 };
-use std::{sync::Mutex};
+use std::sync::Mutex;
 use std::thread;
 use wasi_common::WasiCtx;
 
-use wasmtime::{Engine, Instance, Linker, Store, Val, ValType, Module};
+use wasmtime::{Engine, Instance, Linker, Module, Store, Val, ValType};
 
 use crate::{
     atoms,
     environment::{link_imports, CallbackTokenResource},
     functions,
     module::ModuleResource,
-    printable_term_type::PrintableTermType, store::{WasmexStore, StoreResource},
+    printable_term_type::PrintableTermType,
+    store::{StoreResource, WasmexStore},
 };
 
 pub struct InstanceResource {
@@ -63,7 +64,9 @@ pub fn new(
 
     let store = match store {
         WasmexStore::Plain(store) => Ok(store),
-        WasmexStore::Wasi(_store) => Err(Error::Term(Box::new("must pass a plain store, but got a WASI store"))),
+        WasmexStore::Wasi(_store) => Err(Error::Term(Box::new(
+            "must pass a plain store, but got a WASI store",
+        ))),
     }?;
     let instance = link_and_create_plain_instance(store, engine, &module, imports)?;
 
@@ -76,13 +79,20 @@ pub fn new(
     })
 }
 
-fn link_and_create_plain_instance(store: &mut Store<()>, engine: &Engine, module: &Module, imports: MapIterator) -> Result<Instance, Error> {
+fn link_and_create_plain_instance(
+    store: &mut Store<()>,
+    engine: &Engine,
+    module: &Module,
+    imports: MapIterator,
+) -> Result<Instance, Error> {
     let mut linker = Linker::new(engine);
     link_imports(&mut linker, imports)?;
     linker
         .define_unknown_imports_as_traps(&module)
         .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
-    linker.instantiate(store, module).map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))
+    linker
+        .instantiate(store, module)
+        .map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))
 }
 
 // Creates a new instance from the given WASM bytes.
@@ -123,7 +133,9 @@ pub fn new_wasi<'a>(
     })?);
 
     let store = match store {
-        WasmexStore::Plain(_store) => Err(Error::Term(Box::new("must pass a WASI store, but got a plain store"))),
+        WasmexStore::Plain(_store) => Err(Error::Term(Box::new(
+            "must pass a WASI store, but got a plain store",
+        ))),
         WasmexStore::Wasi(store) => Ok(store),
     }?;
     let instance = link_and_create_wasi_instance(store, engine, &module, imports)?;
@@ -137,7 +149,12 @@ pub fn new_wasi<'a>(
     })
 }
 
-fn link_and_create_wasi_instance(store: &mut Store<WasiCtx>, engine: &Engine, module: &Module, imports: MapIterator) -> Result<Instance, Error> {
+fn link_and_create_wasi_instance(
+    store: &mut Store<WasiCtx>,
+    engine: &Engine,
+    module: &Module,
+    imports: MapIterator,
+) -> Result<Instance, Error> {
     let mut linker: Linker<WasiCtx> = Linker::new(&engine);
     linker.allow_shadowing(true);
     linker
@@ -146,7 +163,9 @@ fn link_and_create_wasi_instance(store: &mut Store<WasiCtx>, engine: &Engine, mo
     wasmtime_wasi::add_to_linker(&mut linker, |s| s)
         .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
     link_imports(&mut linker, imports)?;
-    linker.instantiate(store, module).map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))
+    linker
+        .instantiate(store, module)
+        .map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))
 }
 
 #[rustler::nif(name = "instance_function_export_exists")]
@@ -155,15 +174,13 @@ pub fn function_export_exists(
     instance_resource: ResourceArc<InstanceResource>,
     function_name: String,
 ) -> NifResult<bool> {
-    let instance: Instance =
-        *(instance_resource.inner.lock().map_err(|e| {
-            rustler::Error::Term(Box::new(format!(
-                "Could not unlock instance resource as the mutex was poisoned: {}",
-                e
-            )))
-        })?);
-    let store: &mut WasmexStore =
-    &mut *(store_resource.inner.lock().map_err(|e| {
+    let instance: Instance = *(instance_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock instance resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?);
+    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock instance/store resource as the mutex was poisoned: {}",
             e
@@ -195,7 +212,14 @@ pub fn call_exported_function<'a>(
 
     thread::spawn(move || {
         thread_env.send_and_clear(&pid, |thread_env| {
-            execute_function(thread_env, store_resource, instance_resource, function_name, function_params, from)
+            execute_function(
+                thread_env,
+                store_resource,
+                instance_resource,
+                function_name,
+                function_params,
+                from,
+            )
         })
     });
 
@@ -218,7 +242,7 @@ fn execute_function(
         Ok(vec) => vec,
         Err(_) => return make_error_tuple(&thread_env, "could not load 'function params'", from),
     };
-    let instance: Instance =  *(instance_resource.inner.lock().unwrap());
+    let instance: Instance = *(instance_resource.inner.lock().unwrap());
     let mut store = store_resource.inner.lock().unwrap();
     let function_result = match &mut *store {
         WasmexStore::Plain(store) => functions::find(&instance, store, &function_name),
@@ -235,14 +259,12 @@ fn execute_function(
         }
     };
     let function_params_result = match &*store {
-        WasmexStore::Plain(store) => decode_function_param_terms(
-            &function.ty(store).params().collect(),
-            given_params,
-        ),
-        WasmexStore::Wasi(store) => decode_function_param_terms(
-            &function.ty(store).params().collect(),
-            given_params,
-        ),
+        WasmexStore::Plain(store) => {
+            decode_function_param_terms(&function.ty(store).params().collect(), given_params)
+        }
+        WasmexStore::Wasi(store) => {
+            decode_function_param_terms(&function.ty(store).params().collect(), given_params)
+        }
     };
     let function_params = match function_params_result {
         Ok(vec) => map_wasm_values_to_vals(&vec),
@@ -251,12 +273,8 @@ fn execute_function(
 
     let mut results = Vec::new();
     let call_result = match &mut *store {
-        WasmexStore::Plain(store) => {
-            function.call(store, function_params.as_slice(), &mut results)
-        }
-        WasmexStore::Wasi(store) => {
-            function.call(store, function_params.as_slice(), &mut results)
-        }
+        WasmexStore::Plain(store) => function.call(store, function_params.as_slice(), &mut results),
+        WasmexStore::Wasi(store) => function.call(store, function_params.as_slice(), &mut results),
     };
     match call_result {
         Ok(_) => (),

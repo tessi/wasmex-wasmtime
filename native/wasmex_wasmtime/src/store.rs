@@ -5,7 +5,7 @@ use rustler::{
 use std::sync::Mutex;
 use wasi_common::WasiCtx;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::{Dir, WasiCtxBuilder};
 
 use crate::{atoms, pipe::PipeResource};
 
@@ -67,7 +67,7 @@ pub fn new_wasi<'a>(
     let wasi_ctx_builder = wasi_stdin(options, env, wasi_ctx_builder)?;
     let wasi_ctx_builder = wasi_stdout(options, env, wasi_ctx_builder)?;
     let wasi_ctx_builder = wasi_stderr(options, env, wasi_ctx_builder)?;
-    // let wasi_ctx_builder = wasi_preopen_directories(options, env, mut wasi_ctx_builder)?; // TODO: implement this
+    let wasi_ctx_builder = wasi_preopen_directories(options, env, wasi_ctx_builder)?;
 
     let config = Config::new();
     let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
@@ -141,52 +141,45 @@ fn pipe_from_wasi_options(
         .and_then(|term| term.decode::<ResourceArc<PipeResource>>())
 }
 
-// fn wasi_preopen_directories<'a>(
-//     options: Term<'a>,
-//     env: RustlerEnv<'a>,
-//     builder: &mut WasiCtxBuilder,
-// ) -> Result<(), rustler::Error> {
-//     if let Some(preopen) = options
-//         .map_get("preopen".encode(env))
-//         .ok()
-//         .and_then(MapIterator::new)
-//     {
-//         for (key, opts) in preopen {
-//             let path: &str = key.decode()?;
-//             let dir =
-//             builder
-//                 .preopened_dir(dir, guest_path)
-//                 .preopen(|builder| {
-//                     let builder = builder.directory(directory);
-//                     if let Ok(alias) = opts
-//                         .map_get("alias".encode(env))
-//                         .and_then(|term| term.decode())
-//                     {
-//                         builder.alias(alias);
-//                     }
+fn wasi_preopen_directories<'a>(
+    options: Term<'a>,
+    env: RustlerEnv<'a>,
+    builder: WasiCtxBuilder,
+) -> Result<WasiCtxBuilder, rustler::Error> {
+    let builder = if let Some(preopen) = options
+        .map_get("preopen".encode(env))
+        .ok()
+        .and_then(MapIterator::new)
+    {
+        preopen.fold(Ok(builder), |builder, dir_opts| {
+            preopen_directory(&env, builder, dir_opts)
+        })?
+    } else {
+        builder
+    };
+    Ok(builder)
+}
 
-//                     if let Ok(flags) = opts
-//                         .map_get("flags".encode(env))
-//                         .and_then(|term| term.decode::<ListIterator>())
-//                     {
-//                         for flag in flags {
-//                             if flag.eq(&atoms::read().to_term(env)) {
-//                                 builder.read(true);
-//                             }
-//                             if flag.eq(&atoms::write().to_term(env)) {
-//                                 builder.write(true);
-//                             }
-//                             if flag.eq(&atoms::create().to_term(env)) {
-//                                 builder.create(true);
-//                             }
-//                         }
-//                     }
-//                     builder
-//                 })
-//                 .map_err(|e| {
-//                     rustler::Error::Term(Box::new(format!("Could not create WASI state: {:?}", e)))
-//                 })?;
-//         }
-//     }
-//     Ok(())
-// }
+fn preopen_directory(
+    env: &RustlerEnv,
+    builder: Result<WasiCtxBuilder, Error>,
+    (key, opts): (Term, Term),
+) -> Result<WasiCtxBuilder, Error> {
+    let builder = builder?;
+    let path: &str = key.decode()?;
+    let dir = Dir::from_std_file(
+        std::fs::File::open(path).map_err(|err| rustler::Error::Term(Box::new(err.to_string())))?,
+    );
+    let guest_path = if let Ok(alias) = opts
+        .map_get("alias".encode(*env))
+        .and_then(|term| term.decode())
+    {
+        alias
+    } else {
+        path
+    };
+    let builder = builder
+        .preopened_dir(dir, guest_path)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    Ok(builder)
+}
