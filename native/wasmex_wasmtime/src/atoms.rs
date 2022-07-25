@@ -30,6 +30,7 @@ rustler::atoms! {
     maximum,
     minimum,
     shared,
+    memory64,
     mutability,
     __const__ = "const",
     var,

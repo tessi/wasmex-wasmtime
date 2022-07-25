@@ -1,35 +1,47 @@
 //! A Pipe is a file buffer hold in memory.
 //! It can, for example, be used to replace stdin/stdout/stderr of a WASI module.
 
-use std::collections::VecDeque;
+use std::any::Any;
 use std::io::Write;
 use std::io::{self, Read, Seek};
-use std::sync::{Arc, Mutex};
-
-use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex, RwLock};
 
 use rustler::resource::ResourceArc;
 use rustler::{Atom, Encoder, Term};
 
-use wasmer_wasi::{VirtualFile, WasiFsError};
+use wasi_common::file::{FdFlags, FileType};
+use wasi_common::Error;
+use wasi_common::WasiFile;
 
 use crate::atoms;
 
 /// For piping stdio. Stores all output / input in a byte-vector.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default)]
 pub struct Pipe {
-    buffer: Arc<Mutex<VecDeque<u8>>>,
+    buffer: Arc<RwLock<Vec<u8>>>,
 }
 
 impl Pipe {
     pub fn new() -> Self {
         Self::default()
     }
+    fn borrow(&self) -> std::sync::RwLockWriteGuard<Vec<u8>> {
+        RwLock::write(&self.buffer).unwrap()
+    }
+
+    fn size(&self) -> u64 {
+        (*self.borrow()).len() as u64
+    }
+
+    fn set_len(&mut self, len: u64) {
+        let mut buffer = self.borrow();
+        buffer.resize(len as usize, 0);
+    }
 }
 
 impl Clone for Pipe {
     fn clone(&self) -> Self {
-        Pipe {
+        Self {
             buffer: self.buffer.clone(),
         }
     }
@@ -37,7 +49,7 @@ impl Clone for Pipe {
 
 impl Read for Pipe {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self.borrow();
         let amt = std::cmp::min(buf.len(), buffer.len());
         for (i, byte) in buffer.drain(..amt).enumerate() {
             buf[i] = byte;
@@ -48,7 +60,7 @@ impl Read for Pipe {
 
 impl Write for Pipe {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self.borrow();
         buffer.extend(buf);
         Ok(buf.len())
     }
@@ -66,35 +78,17 @@ impl Seek for Pipe {
     }
 }
 
-impl VirtualFile for Pipe {
-    fn last_accessed(&self) -> u64 {
-        0
-    }
-    fn last_modified(&self) -> u64 {
-        0
-    }
-    fn created_time(&self) -> u64 {
-        0
-    }
-    fn size(&self) -> u64 {
-        let buffer = self.buffer.lock().unwrap();
-        buffer.len() as u64
-    }
-    fn set_len(&mut self, len: u64) -> Result<(), WasiFsError> {
-        let mut buffer = self.buffer.lock().unwrap();
-        buffer.resize(len as usize, 0);
-        Ok(())
-    }
-    fn unlink(&mut self) -> Result<(), WasiFsError> {
-        Ok(())
-    }
-    fn bytes_available(&self) -> Result<usize, WasiFsError> {
-        let buffer = self.buffer.lock().unwrap();
-        Ok(buffer.len())
+#[wiggle::async_trait]
+impl WasiFile for Pipe {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
-    fn sync_to_disk(&self) -> Result<(), WasiFsError> {
-        Ok(())
+    async fn get_filetype(&mut self) -> Result<FileType, Error> {
+        Ok(FileType::Pipe)
+    }
+    async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
+        Ok(FdFlags::APPEND)
     }
 }
 
@@ -130,10 +124,8 @@ pub fn size(resource: ResourceArc<PipeResource>) -> u64 {
 pub fn set_len(resource: ResourceArc<PipeResource>, len: u64) -> Atom {
     let mut pipe = resource.pipe.lock().unwrap();
 
-    match pipe.set_len(len) {
-        Ok(_) => atoms::ok(),
-        _ => atoms::error(),
-    }
+    pipe.set_len(len);
+    atoms::ok()
 }
 
 #[rustler::nif(name = "pipe_read_binary")]

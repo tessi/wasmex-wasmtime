@@ -4,21 +4,32 @@ use rustler::{
     resource::ResourceArc,
     types::tuple::make_tuple,
     types::ListIterator,
-    Encoder, Env as RustlerEnv, MapIterator, NifResult, Term,
+    Encoder, Env as RustlerEnv, Error, MapIterator, NifResult, Term,
 };
-use std::sync::Mutex;
+use std::{sync::Mutex};
 use std::thread;
+use wasi_common::WasiCtx;
 
-use wasmer::{ChainableNamedResolver, Instance, Type, Val, Value};
-use wasmer_wasi::WasiState;
+use wasmtime::{Config, Engine, Instance, Linker, Store, Val, ValType};
+use wasmtime_wasi::sync::WasiCtxBuilder;
 
 use crate::{
-    atoms, environment::Environment, functions, memory::memory_from_instance,
-    module::ModuleResource, pipe::PipeResource, printable_term_type::PrintableTermType,
+    atoms,
+    environment::{link_imports, CallbackTokenResource},
+    functions,
+    module::ModuleResource,
+    pipe::PipeResource,
+    printable_term_type::PrintableTermType,
 };
+
+pub enum WasmexStore {
+    Plain(Store<()>),
+    Wasi(Store<WasiCtx>),
+}
 
 pub struct InstanceResource {
     pub instance: Mutex<Instance>,
+    pub store: Mutex<WasmexStore>,
 }
 
 #[derive(NifTuple)]
@@ -35,28 +46,30 @@ pub struct InstanceResourceResponse {
 //   structure: %{namespace_name: %{import_name: {:fn, param_types, result_types, captured_function}}}
 #[rustler::nif(name = "instance_new")]
 pub fn new(
-    module_resource: ResourceArc<ModuleResource>,
+    resource: ResourceArc<ModuleResource>,
     imports: MapIterator,
 ) -> NifResult<InstanceResourceResponse> {
-    let mut environment = Environment::new();
-    let import_object = environment.import_object(imports)?;
-    let module = module_resource.module.lock().unwrap();
-    let instance = match Instance::new(&module, &import_object) {
-        Ok(instance) => instance,
-        Err(e) => {
-            return Err(rustler::Error::Term(Box::new(format!(
-                "Cannot Instantiate: {:?}",
-                e
-            ))))
-        }
-    };
-
-    if let Ok(memory) = memory_from_instance(&instance) {
-        environment.memory.initialize(memory.clone());
-    }
+    let config = Config::new();
+    let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    let mut linker = Linker::new(&engine);
+    link_imports(&mut linker, imports)?;
+    let module = resource.module.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock module resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?;
+    linker
+        .define_unknown_imports_as_traps(&module)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    let mut store: Store<()> = Store::default();
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))?;
 
     let resource = ResourceArc::new(InstanceResource {
         instance: Mutex::new(instance),
+        store: Mutex::new(WasmexStore::Plain(store)),
     });
     Ok(InstanceResourceResponse {
         ok: atoms::ok(),
@@ -79,15 +92,15 @@ pub fn new(
 #[rustler::nif(name = "instance_new_wasi")]
 pub fn new_wasi<'a>(
     env: rustler::Env<'a>,
-    module_resource: ResourceArc<ModuleResource>,
+    resource: ResourceArc<ModuleResource>,
     imports: MapIterator,
     wasi_args: ListIterator,
     wasi_env: MapIterator,
     options: Term<'a>,
 ) -> NifResult<InstanceResourceResponse> {
     let wasi_args = wasi_args
-        .map(|term: Term| term.decode::<String>().map(|s| s.into_bytes()))
-        .collect::<Result<Vec<Vec<u8>>, _>>()?;
+        .map(|term: Term| term.decode::<String>())
+        .collect::<Result<Vec<String>, _>>()?;
     let wasi_env = wasi_env
         .map(|(key, val)| {
             key.decode::<String>()
@@ -95,35 +108,43 @@ pub fn new_wasi<'a>(
         })
         .collect::<Result<Vec<(String, String)>, _>>()?;
 
-    let mut environment = Environment::new();
-    let mut wasi_wasmer_env = create_wasi_env(wasi_args, wasi_env, options, env)?;
-    let module = module_resource.module.lock().unwrap();
+    // let mut wasi_wasmer_env = create_wasi_env(wasi_args, wasi_env, options, env)?;
+    let wasi_ctx_builder = WasiCtxBuilder::new()
+        .args(&wasi_args)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?
+        .envs(&wasi_env)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
 
-    // creates as WASI import object and merges imports from elixir into them
-    // this allows overwriting certain WASI functions from elixir
-    let import_object = wasi_wasmer_env.import_object(&module).map_err(|e| {
-        rustler::Error::Term(Box::new(format!("Could not create import object: {:?}", e)))
+    let wasi_ctx_builder = wasi_stdin(options, env, wasi_ctx_builder)?;
+    let wasi_ctx_builder = wasi_stdout(options, env, wasi_ctx_builder)?;
+    let wasi_ctx_builder = wasi_stderr(options, env, wasi_ctx_builder)?;
+    // let wasi_ctx_builder = wasi_preopen_directories(options, env, mut wasi_ctx_builder)?; // TODO: implement this
+
+    let module = resource.module.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock module resource as the mutex was poisoned: {}",
+            e
+        )))
     })?;
 
-    let import_object_overwrites = environment.import_object(imports)?;
-    let resolver = import_object.chain_front(import_object_overwrites);
-
-    let instance = match Instance::new(&module, &resolver) {
-        Ok(instance) => instance,
-        Err(e) => {
-            return Err(rustler::Error::Term(Box::new(format!(
-                "Cannot instantiate: {:?}",
-                e
-            ))))
-        }
-    };
-
-    if let Ok(memory) = memory_from_instance(&instance) {
-        environment.memory.initialize(memory.clone());
-    }
+    let config = Config::new();
+    let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    let mut linker: Linker<WasiCtx> = Linker::new(&engine);
+    linker.allow_shadowing(true);
+    linker
+        .define_unknown_imports_as_traps(&module)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    wasmtime_wasi::add_to_linker(&mut linker, |s| s)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    link_imports(&mut linker, imports)?;
+    let mut store: Store<WasiCtx> = Store::new(&engine, wasi_ctx_builder.build());
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))?;
 
     let resource = ResourceArc::new(InstanceResource {
         instance: Mutex::new(instance),
+        store: Mutex::new(WasmexStore::Wasi(store))
     });
     Ok(InstanceResourceResponse {
         ok: atoms::ok(),
@@ -131,120 +152,102 @@ pub fn new_wasi<'a>(
     })
 }
 
-fn create_wasi_env<'a>(
-    wasi_args: Vec<Vec<u8>>,
-    wasi_env: Vec<(String, String)>,
-    options: Term<'a>,
-    env: RustlerEnv<'a>,
-) -> Result<wasmer_wasi::WasiEnv, rustler::Error> {
-    let mut state_builder = WasiState::new("wasmex_wasmtime");
-    state_builder.args(wasi_args);
-    for (key, value) in wasi_env {
-        state_builder.env(key, value);
-    }
-    wasi_stdin(options, env, &mut state_builder)?;
-    wasi_stdout(options, env, &mut state_builder)?;
-    wasi_stderr(options, env, &mut state_builder)?;
-    wasi_preopen_directories(options, env, &mut state_builder)?;
-    state_builder.finalize().map_err(|e| {
-        rustler::Error::Term(Box::new(format!("Could not create WASI state: {:?}", e)))
-    })
-}
+// fn wasi_preopen_directories<'a>(
+//     options: Term<'a>,
+//     env: RustlerEnv<'a>,
+//     builder: &mut WasiCtxBuilder,
+// ) -> Result<(), rustler::Error> {
+//     if let Some(preopen) = options
+//         .map_get("preopen".encode(env))
+//         .ok()
+//         .and_then(MapIterator::new)
+//     {
+//         for (key, opts) in preopen {
+//             let path: &str = key.decode()?;
+//             let dir =
+//             builder
+//                 .preopened_dir(dir, guest_path)
+//                 .preopen(|builder| {
+//                     let builder = builder.directory(directory);
+//                     if let Ok(alias) = opts
+//                         .map_get("alias".encode(env))
+//                         .and_then(|term| term.decode())
+//                     {
+//                         builder.alias(alias);
+//                     }
 
-fn wasi_preopen_directories<'a>(
-    options: Term<'a>,
-    env: RustlerEnv<'a>,
-    state_builder: &mut wasmer_wasi::WasiStateBuilder,
-) -> Result<(), rustler::Error> {
-    if let Some(preopen) = options
-        .map_get("preopen".encode(env))
-        .ok()
-        .and_then(MapIterator::new)
-    {
-        for (key, opts) in preopen {
-            let directory: &str = key.decode()?;
-            state_builder
-                .preopen(|builder| {
-                    let builder = builder.directory(directory);
-                    if let Ok(alias) = opts
-                        .map_get("alias".encode(env))
-                        .and_then(|term| term.decode())
-                    {
-                        builder.alias(alias);
-                    }
-
-                    if let Ok(flags) = opts
-                        .map_get("flags".encode(env))
-                        .and_then(|term| term.decode::<ListIterator>())
-                    {
-                        for flag in flags {
-                            if flag.eq(&atoms::read().to_term(env)) {
-                                builder.read(true);
-                            }
-                            if flag.eq(&atoms::write().to_term(env)) {
-                                builder.write(true);
-                            }
-                            if flag.eq(&atoms::create().to_term(env)) {
-                                builder.create(true);
-                            }
-                        }
-                    }
-                    builder
-                })
-                .map_err(|e| {
-                    rustler::Error::Term(Box::new(format!("Could not create WASI state: {:?}", e)))
-                })?;
-        }
-    }
-    Ok(())
-}
+//                     if let Ok(flags) = opts
+//                         .map_get("flags".encode(env))
+//                         .and_then(|term| term.decode::<ListIterator>())
+//                     {
+//                         for flag in flags {
+//                             if flag.eq(&atoms::read().to_term(env)) {
+//                                 builder.read(true);
+//                             }
+//                             if flag.eq(&atoms::write().to_term(env)) {
+//                                 builder.write(true);
+//                             }
+//                             if flag.eq(&atoms::create().to_term(env)) {
+//                                 builder.create(true);
+//                             }
+//                         }
+//                     }
+//                     builder
+//                 })
+//                 .map_err(|e| {
+//                     rustler::Error::Term(Box::new(format!("Could not create WASI state: {:?}", e)))
+//                 })?;
+//         }
+//     }
+//     Ok(())
+// }
 
 fn wasi_stderr(
     options: Term,
     env: RustlerEnv,
-    state_builder: &mut wasmer_wasi::WasiStateBuilder,
-) -> Result<(), rustler::Error> {
+    builder: WasiCtxBuilder,
+) -> Result<WasiCtxBuilder, rustler::Error> {
     if let Ok(resource) = pipe_from_wasi_options(options, "stderr", &env) {
         let pipe = resource.pipe.lock().map_err(|_e| {
             rustler::Error::Term(Box::new(
                 "Could not unlock resource as the mutex was poisoned.",
             ))
         })?;
-        state_builder.stderr(Box::new(pipe.clone()));
+        return Ok(builder.stderr(Box::new(pipe.clone())));
     }
-    Ok(())
+    Ok(builder)
 }
 
 fn wasi_stdout(
     options: Term,
     env: RustlerEnv,
-    state_builder: &mut wasmer_wasi::WasiStateBuilder,
-) -> Result<(), rustler::Error> {
+    builder: WasiCtxBuilder,
+) -> Result<WasiCtxBuilder, rustler::Error> {
     if let Ok(resource) = pipe_from_wasi_options(options, "stdout", &env) {
         let pipe = resource.pipe.lock().map_err(|_e| {
             rustler::Error::Term(Box::new(
                 "Could not unlock resource as the mutex was poisoned.",
             ))
         })?;
-        state_builder.stdout(Box::new(pipe.clone()));
+        return Ok(builder.stdout(Box::new(pipe.clone())));
     }
-    Ok(())
+    Ok(builder)
 }
 
 fn wasi_stdin(
     options: Term,
     env: RustlerEnv,
-    state_builder: &mut wasmer_wasi::WasiStateBuilder,
-) -> Result<(), rustler::Error> {
+    builder: WasiCtxBuilder,
+) -> Result<WasiCtxBuilder, rustler::Error> {
     if let Ok(resource) = pipe_from_wasi_options(options, "stdin", &env) {
         let pipe = resource.pipe.lock().map_err(|_e| {
             rustler::Error::Term(Box::new(
                 "Could not unlock resource as the mutex was poisoned.",
             ))
         })?;
-        state_builder.stdin(Box::new(pipe.clone()));
+        return Ok(builder.stdin(Box::new(pipe.clone())));
     }
-    Ok(())
+    Ok(builder)
 }
 
 fn pipe_from_wasi_options(
@@ -262,10 +265,27 @@ fn pipe_from_wasi_options(
 pub fn function_export_exists(
     resource: ResourceArc<InstanceResource>,
     function_name: String,
-) -> bool {
-    let instance = resource.instance.lock().unwrap();
+) -> NifResult<bool> {
+    let instance: Instance =
+        *(resource.instance.lock().map_err(|e| {
+            rustler::Error::Term(Box::new(format!(
+                "Could not unlock instance resource as the mutex was poisoned: {}",
+                e
+            )))
+        })?);
+    let mut store =
+    resource.store.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock instance/store resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?;
 
-    functions::exists(&instance, &function_name)
+    let result = match &mut *store {
+        WasmexStore::Plain(store) => functions::exists(&instance, store, &function_name),
+        WasmexStore::Wasi(store) => functions::exists(&instance, store, &function_name),
+    };
+    Ok(result)
 }
 
 #[rustler::nif(name = "instance_call_exported_function", schedule = "DirtyCpu")]
@@ -307,10 +327,15 @@ fn execute_function(
         Ok(vec) => vec,
         Err(_) => return make_error_tuple(&thread_env, "could not load 'function params'", from),
     };
-    let instance = resource.instance.lock().unwrap();
-    let function = match functions::find(&instance, &function_name) {
-        Ok(f) => f,
-        Err(_) => {
+    let instance: Instance =  *(resource.instance.lock().unwrap());
+    let mut store = resource.store.lock().unwrap();
+    let function_result = match &mut *store {
+        WasmexStore::Plain(store) => functions::find(&instance, store, &function_name),
+        WasmexStore::Wasi(store) => functions::find(&instance, store, &function_name),
+    };
+    let function = match function_result {
+        Some(func) => func,
+        None => {
             return make_error_tuple(
                 &thread_env,
                 &format!("exported function `{}` not found", function_name),
@@ -318,13 +343,32 @@ fn execute_function(
             )
         }
     };
-    let function_params = match decode_function_param_terms(function.ty().params(), given_params) {
-        Ok(vec) => map_to_wasmer_values(&vec),
+    let function_params_result = match &*store {
+        WasmexStore::Plain(store) => decode_function_param_terms(
+            &function.ty(store).params().collect(),
+            given_params,
+        ),
+        WasmexStore::Wasi(store) => decode_function_param_terms(
+            &function.ty(store).params().collect(),
+            given_params,
+        ),
+    };
+    let function_params = match function_params_result {
+        Ok(vec) => map_wasm_values_to_vals(&vec),
         Err(reason) => return make_error_tuple(&thread_env, &reason, from),
     };
 
-    let results = match function.call(function_params.as_slice()) {
-        Ok(results) => results,
+    let mut results = Vec::new();
+    let call_result = match &mut *store {
+        WasmexStore::Plain(store) => {
+            function.call(store, function_params.as_slice(), &mut results)
+        }
+        WasmexStore::Wasi(store) => {
+            function.call(store, function_params.as_slice(), &mut results)
+        }
+    };
+    match call_result {
+        Ok(_) => (),
         Err(e) => {
             return make_error_tuple(
                 &thread_env,
@@ -377,7 +421,7 @@ pub enum WasmValue {
 }
 
 pub fn decode_function_param_terms(
-    params: &[Type],
+    params: &Vec<ValType>,
     function_param_terms: Vec<Term>,
 ) -> Result<Vec<WasmValue>, String> {
     if params.len() != function_param_terms.len() {
@@ -395,7 +439,7 @@ pub fn decode_function_param_terms(
         .enumerate()
     {
         let value = match (param, given_param.get_type()) {
-            (Type::I32, TermType::Number) => match given_param.decode::<i32>() {
+            (ValType::I32, TermType::Number) => match given_param.decode::<i32>() {
                 Ok(value) => WasmValue::I32(value),
                 Err(_) => {
                     return Err(format!(
@@ -404,7 +448,7 @@ pub fn decode_function_param_terms(
                     ));
                 }
             },
-            (Type::I64, TermType::Number) => match given_param.decode::<i64>() {
+            (ValType::I64, TermType::Number) => match given_param.decode::<i64>() {
                 Ok(value) => WasmValue::I64(value),
                 Err(_) => {
                     return Err(format!(
@@ -413,7 +457,7 @@ pub fn decode_function_param_terms(
                     ));
                 }
             },
-            (Type::F32, TermType::Number) => match given_param.decode::<f32>() {
+            (ValType::F32, TermType::Number) => match given_param.decode::<f32>() {
                 Ok(value) => {
                     if value.is_finite() {
                         WasmValue::F32(value)
@@ -431,7 +475,7 @@ pub fn decode_function_param_terms(
                     ));
                 }
             },
-            (Type::F64, TermType::Number) => match given_param.decode::<f64>() {
+            (ValType::F64, TermType::Number) => match given_param.decode::<f64>() {
                 Ok(value) => WasmValue::F64(value),
                 Err(_) => {
                     return Err(format!(
@@ -453,14 +497,14 @@ pub fn decode_function_param_terms(
     Ok(function_params)
 }
 
-pub fn map_to_wasmer_values(values: &[WasmValue]) -> Vec<Val> {
+pub fn map_wasm_values_to_vals(values: &[WasmValue]) -> Vec<Val> {
     values
         .iter()
         .map(|value| match value {
-            WasmValue::I32(value) => Value::I32(*value),
-            WasmValue::I64(value) => Value::I64(*value),
-            WasmValue::F32(value) => Value::F32(*value),
-            WasmValue::F64(value) => Value::F64(*value),
+            WasmValue::I32(value) => Val::I32(*value),
+            WasmValue::I64(value) => Val::I64(*value),
+            WasmValue::F32(value) => Val::F32(value.to_bits()),
+            WasmValue::F64(value) => Val::F64(value.to_bits()),
         })
         .collect()
 }
@@ -474,4 +518,37 @@ fn make_error_tuple<'a>(env: &RustlerEnv<'a>, reason: &str, from: Term<'a>) -> T
             from,
         ],
     )
+}
+
+// called from elixir, params
+// * callback_token
+// * success: :ok | :error
+//   indicates whether the call was successful or produced an elixir-error
+// * results: [number]
+//   return values of the elixir-callback - empty list when success-type is :error
+#[rustler::nif(name = "instance_receive_callback_result")]
+pub fn receive_callback_result(
+    token_resource: ResourceArc<CallbackTokenResource>,
+    success: bool,
+    result_list: ListIterator,
+) -> NifResult<rustler::Atom> {
+    let results = if success {
+        let return_types = token_resource.token.return_types.clone();
+        match decode_function_param_terms(&return_types, result_list.collect()) {
+            Ok(v) => v,
+            Err(_reason) => {
+                return Err(Error::Atom(
+                    "could not convert callback result param to expected return signature",
+                ));
+            }
+        }
+    } else {
+        vec![]
+    };
+
+    let mut result = token_resource.token.return_values.lock().unwrap();
+    *result = Some((success, results));
+    token_resource.token.continue_signal.notify_one();
+
+    Ok(atoms::ok())
 }

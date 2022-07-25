@@ -4,7 +4,6 @@ pub mod functions;
 pub mod instance;
 pub mod memory;
 pub mod module;
-pub mod namespace;
 pub mod pipe;
 pub mod printable_term_type;
 
@@ -21,22 +20,20 @@ rustler::init! {
         instance::function_export_exists,
         instance::new_wasi,
         instance::new,
-        memory::bytes_per_element,
+        instance::receive_callback_result,
         memory::from_instance,
-        memory::get,
+        memory::get_byte,
         memory::grow,
         memory::length,
         memory::read_binary,
-        memory::set,
+        memory::set_byte,
         memory::write_binary,
         module::compile,
         module::exports,
         module::imports,
         module::name,
         module::serialize,
-        module::set_name,
         module::unsafe_deserialize,
-        namespace::receive_callback_result,
         pipe::create,
         pipe::read_binary,
         pipe::set_len,

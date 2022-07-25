@@ -1,9 +1,11 @@
-use wasmer::{ExportError, Function, Instance};
+use wasmtime::Func;
+use wasmtime::Instance;
+use wasmtime::Store;
 
-pub fn exists(instance: &Instance, name: &str) -> bool {
-    find(instance, name).is_ok()
+pub fn exists<T>(instance: &Instance, store: &mut Store<T>, name: &str) -> bool {
+    find(instance, store, name).is_some()
 }
 
-pub fn find<'a>(instance: &'a Instance, name: &str) -> Result<&'a Function, ExportError> {
-    instance.exports.get(name)
+pub fn find<T>(instance: &Instance, store: &mut Store<T>, name: &str) -> Option<Func> {
+    instance.get_func(store, name)
 }
