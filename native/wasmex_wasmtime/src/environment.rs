@@ -188,8 +188,8 @@ fn link_imported_function<T>(
     Ok(())
 }
 
-fn write_results(results: &mut [Val], return_values: &Vec<WasmValue>) -> Result<(), Trap> {
-    results.clone_from_slice(&map_wasm_values_to_vals(&return_values));
+fn write_results(results: &mut [Val], return_values: &[WasmValue]) -> Result<(), Trap> {
+    results.clone_from_slice(&map_wasm_values_to_vals(return_values));
     Ok(())
 }
 

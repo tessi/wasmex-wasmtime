@@ -109,12 +109,11 @@ fn grow_by_pages<T>(
 ) -> Result<u64, Error> {
     memory
         .grow(store, number_of_pages)
-        .map(|previous_pages| previous_pages)
         .map_err(|err| Error::RaiseTerm(Box::new(format!("Failed to grow the memory: {}.", err))))
 }
 
 #[rustler::nif(name = "memory_get_byte")]
-pub fn get_byte<'a>(
+pub fn get_byte(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
     offset: usize,
@@ -143,11 +142,11 @@ pub fn get_byte<'a>(
 }
 
 #[rustler::nif(name = "memory_set_byte")]
-pub fn set_byte<'a>(
+pub fn set_byte(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
     offset: usize,
-    value: Term<'a>,
+    value: Term,
 ) -> NifResult<Atom> {
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
@@ -179,13 +178,13 @@ pub fn memory_from_instance<T>(instance: &Instance, store: &mut Store<T>) -> Res
 }
 
 #[rustler::nif(name = "memory_read_binary")]
-pub fn read_binary<'a>(
-    env: rustler::Env<'a>,
+pub fn read_binary(
+    env: rustler::Env,
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
     offset: usize,
     len: usize,
-) -> NifResult<Binary<'a>> {
+) -> NifResult<Binary> {
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock store resource as the mutex was poisoned: {}",

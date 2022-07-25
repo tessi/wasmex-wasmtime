@@ -88,7 +88,7 @@ fn link_and_create_plain_instance(
     let mut linker = Linker::new(engine);
     link_imports(&mut linker, imports)?;
     linker
-        .define_unknown_imports_as_traps(&module)
+        .define_unknown_imports_as_traps(module)
         .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
     linker
         .instantiate(store, module)
@@ -108,7 +108,7 @@ fn link_and_create_plain_instance(
 //   * stdout (optional): A pipe that will be passed as stdout to the WASM module
 //   * stderr (optional): A pipe that will be passed as stderr to the WASM module
 #[rustler::nif(name = "instance_new_wasi")]
-pub fn new_wasi<'a>(
+pub fn new_wasi(
     store_resource: ResourceArc<StoreResource>,
     module_resource: ResourceArc<ModuleResource>,
     imports: MapIterator,
@@ -155,10 +155,10 @@ fn link_and_create_wasi_instance(
     module: &Module,
     imports: MapIterator,
 ) -> Result<Instance, Error> {
-    let mut linker: Linker<WasiCtx> = Linker::new(&engine);
+    let mut linker: Linker<WasiCtx> = Linker::new(engine);
     linker.allow_shadowing(true);
     linker
-        .define_unknown_imports_as_traps(&module)
+        .define_unknown_imports_as_traps(module)
         .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
     wasmtime_wasi::add_to_linker(&mut linker, |s| s)
         .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
@@ -259,12 +259,14 @@ fn execute_function(
         }
     };
     let function_params_result = match &*store {
-        WasmexStore::Plain(store) => {
-            decode_function_param_terms(&function.ty(store).params().collect(), given_params)
-        }
-        WasmexStore::Wasi(store) => {
-            decode_function_param_terms(&function.ty(store).params().collect(), given_params)
-        }
+        WasmexStore::Plain(store) => decode_function_param_terms(
+            &function.ty(store).params().collect::<Vec<ValType>>(),
+            given_params,
+        ),
+        WasmexStore::Wasi(store) => decode_function_param_terms(
+            &function.ty(store).params().collect::<Vec<ValType>>(),
+            given_params,
+        ),
     };
     let function_params = match function_params_result {
         Ok(vec) => map_wasm_values_to_vals(&vec),
@@ -330,7 +332,7 @@ pub enum WasmValue {
 }
 
 pub fn decode_function_param_terms(
-    params: &Vec<ValType>,
+    params: &[ValType],
     function_param_terms: Vec<Term>,
 ) -> Result<Vec<WasmValue>, String> {
     if params.len() != function_param_terms.len() {
