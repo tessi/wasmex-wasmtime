@@ -8,11 +8,11 @@ use rustler::{Atom, Binary, Error, NewBinary, NifResult, Term};
 
 use wasmtime::{Instance, Memory, Store};
 
-use crate::instance::WasmexStore;
+use crate::store::{WasmexStore, self};
 use crate::{atoms, instance};
 
 pub struct MemoryResource {
-    pub memory: Mutex<Memory>,
+    pub inner: Mutex<Memory>,
 }
 
 #[derive(NifTuple)]
@@ -23,28 +23,29 @@ pub struct MemoryResourceResponse {
 
 #[rustler::nif(name = "memory_from_instance")]
 pub fn from_instance(
-    resource: ResourceArc<instance::InstanceResource>,
+    store_resource: ResourceArc<store::StoreResource>,
+    instance_resource: ResourceArc<instance::InstanceResource>,
 ) -> rustler::NifResult<MemoryResourceResponse> {
     let instance: Instance =
-        *(resource.instance.lock().map_err(|e| {
+        *(instance_resource.inner.lock().map_err(|e| {
             rustler::Error::Term(Box::new(format!(
                 "Could not unlock instance resource as the mutex was poisoned: {}",
                 e
             )))
         })?);
-    let mut store =
-    resource.store.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock instance/store resource as the mutex was poisoned: {}",
-            e
-        )))
-    })?;
-    let memory = match &mut *store {
+        let store: &mut WasmexStore =
+        &mut *(store_resource.inner.lock().map_err(|e| {
+            rustler::Error::Term(Box::new(format!(
+                "Could not unlock store resource as the mutex was poisoned: {}",
+                e
+            )))
+        })?);
+    let memory = match store {
         WasmexStore::Plain(store) => memory_from_instance(&instance, store)?,
         WasmexStore::Wasi(store) => memory_from_instance(&instance, store)?,
     };
     let resource = ResourceArc::new(MemoryResource {
-        memory: Mutex::new(memory.to_owned()),
+        inner: Mutex::new(memory.to_owned()),
     });
 
     Ok(MemoryResourceResponse {
@@ -55,7 +56,7 @@ pub fn from_instance(
 
 #[rustler::nif(name = "memory_length")]
 pub fn length(resource: ResourceArc<MemoryResource>) -> NifResult<usize> {
-    let memory = resource.memory.lock().unwrap();
+    let memory = resource.inner.lock().unwrap();
     let store: Store<()> = Store::default(); // todo: get store
     let length = memory.data_size(store);
     Ok(length)
@@ -63,7 +64,7 @@ pub fn length(resource: ResourceArc<MemoryResource>) -> NifResult<usize> {
 
 #[rustler::nif(name = "memory_grow")]
 pub fn grow(resource: ResourceArc<MemoryResource>, pages: u64) -> NifResult<u64> {
-    let memory = resource.memory.lock().unwrap();
+    let memory = resource.inner.lock().unwrap();
     let mut store = Store::default(); // todo: get store
     let old_pages = grow_by_pages(&memory, &mut store, pages)?;
     Ok(old_pages)
@@ -83,7 +84,7 @@ fn grow_by_pages(
 
 #[rustler::nif(name = "memory_get_byte")]
 pub fn get_byte<'a>(resource: ResourceArc<MemoryResource>, offset: usize) -> NifResult<u8> {
-    let memory = resource.memory.lock().unwrap();
+    let memory = resource.inner.lock().unwrap();
     let mut store: Store<()> = Store::default(); // todo: get store
 
     let mut buffer = [0];
@@ -100,7 +101,7 @@ pub fn set_byte<'a>(
     offset: usize,
     value: Term<'a>,
 ) -> NifResult<Atom> {
-    let memory: Memory = *(resource.memory.lock().unwrap());
+    let memory: Memory = *(resource.inner.lock().unwrap());
     let mut store: Store<()> = Store::default(); // todo: get store
     let value = value.decode()?;
     memory
@@ -124,7 +125,7 @@ pub fn read_binary<'a>(
     offset: usize,
     len: usize,
 ) -> NifResult<Binary<'a>> {
-    let memory: Memory = *(resource.memory.lock().unwrap());
+    let memory: Memory = *(resource.inner.lock().unwrap());
     let mut store: Store<()> = Store::default(); // todo: get store
     let mut buffer = vec![0u8; len];
 
@@ -143,7 +144,7 @@ pub fn write_binary(
     offset: usize,
     binary: Binary,
 ) -> NifResult<Atom> {
-    let memory: Memory = *(resource.memory.lock().unwrap());
+    let memory: Memory = *(resource.inner.lock().unwrap());
     let mut store: Store<()> = Store::default(); // todo: get store
     memory
         .write(&mut store, offset, binary.as_slice())

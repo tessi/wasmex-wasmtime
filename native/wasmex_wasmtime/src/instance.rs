@@ -10,26 +10,18 @@ use std::{sync::Mutex};
 use std::thread;
 use wasi_common::WasiCtx;
 
-use wasmtime::{Config, Engine, Instance, Linker, Store, Val, ValType};
-use wasmtime_wasi::sync::WasiCtxBuilder;
+use wasmtime::{Engine, Instance, Linker, Store, Val, ValType, Module};
 
 use crate::{
     atoms,
     environment::{link_imports, CallbackTokenResource},
     functions,
     module::ModuleResource,
-    pipe::PipeResource,
-    printable_term_type::PrintableTermType,
+    printable_term_type::PrintableTermType, store::{WasmexStore, StoreResource},
 };
 
-pub enum WasmexStore {
-    Plain(Store<()>),
-    Wasi(Store<WasiCtx>),
-}
-
 pub struct InstanceResource {
-    pub instance: Mutex<Instance>,
-    pub store: Mutex<WasmexStore>,
+    pub inner: Mutex<Instance>,
 }
 
 #[derive(NifTuple)]
@@ -46,35 +38,51 @@ pub struct InstanceResourceResponse {
 //   structure: %{namespace_name: %{import_name: {:fn, param_types, result_types, captured_function}}}
 #[rustler::nif(name = "instance_new")]
 pub fn new(
-    resource: ResourceArc<ModuleResource>,
+    store_resource: ResourceArc<StoreResource>,
+    module_resource: ResourceArc<ModuleResource>,
     imports: MapIterator,
 ) -> NifResult<InstanceResourceResponse> {
-    let config = Config::new();
-    let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
-    let mut linker = Linker::new(&engine);
-    link_imports(&mut linker, imports)?;
-    let module = resource.module.lock().map_err(|e| {
+    let module = module_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
         )))
     })?;
-    linker
-        .define_unknown_imports_as_traps(&module)
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
-    let mut store: Store<()> = Store::default();
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))?;
+    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock store resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?);
+    let engine: &Engine = &mut *(store_resource.engine.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock store/engine resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?);
+
+    let store = match store {
+        WasmexStore::Plain(store) => Ok(store),
+        WasmexStore::Wasi(_store) => Err(Error::Term(Box::new("must pass a plain store, but got a WASI store"))),
+    }?;
+    let instance = link_and_create_plain_instance(store, engine, &module, imports)?;
 
     let resource = ResourceArc::new(InstanceResource {
-        instance: Mutex::new(instance),
-        store: Mutex::new(WasmexStore::Plain(store)),
+        inner: Mutex::new(instance),
     });
     Ok(InstanceResourceResponse {
         ok: atoms::ok(),
         resource,
     })
+}
+
+fn link_and_create_plain_instance(store: &mut Store<()>, engine: &Engine, module: &Module, imports: MapIterator) -> Result<Instance, Error> {
+    let mut linker = Linker::new(engine);
+    link_imports(&mut linker, imports)?;
+    linker
+        .define_unknown_imports_as_traps(&module)
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    linker.instantiate(store, module).map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))
 }
 
 // Creates a new instance from the given WASM bytes.
@@ -91,44 +99,45 @@ pub fn new(
 //   * stderr (optional): A pipe that will be passed as stderr to the WASM module
 #[rustler::nif(name = "instance_new_wasi")]
 pub fn new_wasi<'a>(
-    env: rustler::Env<'a>,
-    resource: ResourceArc<ModuleResource>,
+    store_resource: ResourceArc<StoreResource>,
+    module_resource: ResourceArc<ModuleResource>,
     imports: MapIterator,
-    wasi_args: ListIterator,
-    wasi_env: MapIterator,
-    options: Term<'a>,
 ) -> NifResult<InstanceResourceResponse> {
-    let wasi_args = wasi_args
-        .map(|term: Term| term.decode::<String>())
-        .collect::<Result<Vec<String>, _>>()?;
-    let wasi_env = wasi_env
-        .map(|(key, val)| {
-            key.decode::<String>()
-                .and_then(|key| val.decode::<String>().map(|val| (key, val)))
-        })
-        .collect::<Result<Vec<(String, String)>, _>>()?;
-
-    // let mut wasi_wasmer_env = create_wasi_env(wasi_args, wasi_env, options, env)?;
-    let wasi_ctx_builder = WasiCtxBuilder::new()
-        .args(&wasi_args)
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?
-        .envs(&wasi_env)
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
-
-    let wasi_ctx_builder = wasi_stdin(options, env, wasi_ctx_builder)?;
-    let wasi_ctx_builder = wasi_stdout(options, env, wasi_ctx_builder)?;
-    let wasi_ctx_builder = wasi_stderr(options, env, wasi_ctx_builder)?;
-    // let wasi_ctx_builder = wasi_preopen_directories(options, env, mut wasi_ctx_builder)?; // TODO: implement this
-
-    let module = resource.module.lock().map_err(|e| {
+    let module = module_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
         )))
     })?;
+    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock store resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?);
+    let engine: &Engine = &mut *(store_resource.engine.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock store/engine resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?);
 
-    let config = Config::new();
-    let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    let store = match store {
+        WasmexStore::Plain(_store) => Err(Error::Term(Box::new("must pass a WASI store, but got a plain store"))),
+        WasmexStore::Wasi(store) => Ok(store),
+    }?;
+    let instance = link_and_create_wasi_instance(store, engine, &module, imports)?;
+
+    let resource = ResourceArc::new(InstanceResource {
+        inner: Mutex::new(instance),
+    });
+    Ok(InstanceResourceResponse {
+        ok: atoms::ok(),
+        resource,
+    })
+}
+
+fn link_and_create_wasi_instance(store: &mut Store<WasiCtx>, engine: &Engine, module: &Module, imports: MapIterator) -> Result<Instance, Error> {
     let mut linker: Linker<WasiCtx> = Linker::new(&engine);
     linker.allow_shadowing(true);
     linker
@@ -137,151 +146,31 @@ pub fn new_wasi<'a>(
     wasmtime_wasi::add_to_linker(&mut linker, |s| s)
         .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
     link_imports(&mut linker, imports)?;
-    let mut store: Store<WasiCtx> = Store::new(&engine, wasi_ctx_builder.build());
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))?;
-
-    let resource = ResourceArc::new(InstanceResource {
-        instance: Mutex::new(instance),
-        store: Mutex::new(WasmexStore::Wasi(store))
-    });
-    Ok(InstanceResourceResponse {
-        ok: atoms::ok(),
-        resource,
-    })
-}
-
-// fn wasi_preopen_directories<'a>(
-//     options: Term<'a>,
-//     env: RustlerEnv<'a>,
-//     builder: &mut WasiCtxBuilder,
-// ) -> Result<(), rustler::Error> {
-//     if let Some(preopen) = options
-//         .map_get("preopen".encode(env))
-//         .ok()
-//         .and_then(MapIterator::new)
-//     {
-//         for (key, opts) in preopen {
-//             let path: &str = key.decode()?;
-//             let dir =
-//             builder
-//                 .preopened_dir(dir, guest_path)
-//                 .preopen(|builder| {
-//                     let builder = builder.directory(directory);
-//                     if let Ok(alias) = opts
-//                         .map_get("alias".encode(env))
-//                         .and_then(|term| term.decode())
-//                     {
-//                         builder.alias(alias);
-//                     }
-
-//                     if let Ok(flags) = opts
-//                         .map_get("flags".encode(env))
-//                         .and_then(|term| term.decode::<ListIterator>())
-//                     {
-//                         for flag in flags {
-//                             if flag.eq(&atoms::read().to_term(env)) {
-//                                 builder.read(true);
-//                             }
-//                             if flag.eq(&atoms::write().to_term(env)) {
-//                                 builder.write(true);
-//                             }
-//                             if flag.eq(&atoms::create().to_term(env)) {
-//                                 builder.create(true);
-//                             }
-//                         }
-//                     }
-//                     builder
-//                 })
-//                 .map_err(|e| {
-//                     rustler::Error::Term(Box::new(format!("Could not create WASI state: {:?}", e)))
-//                 })?;
-//         }
-//     }
-//     Ok(())
-// }
-
-fn wasi_stderr(
-    options: Term,
-    env: RustlerEnv,
-    builder: WasiCtxBuilder,
-) -> Result<WasiCtxBuilder, rustler::Error> {
-    if let Ok(resource) = pipe_from_wasi_options(options, "stderr", &env) {
-        let pipe = resource.pipe.lock().map_err(|_e| {
-            rustler::Error::Term(Box::new(
-                "Could not unlock resource as the mutex was poisoned.",
-            ))
-        })?;
-        return Ok(builder.stderr(Box::new(pipe.clone())));
-    }
-    Ok(builder)
-}
-
-fn wasi_stdout(
-    options: Term,
-    env: RustlerEnv,
-    builder: WasiCtxBuilder,
-) -> Result<WasiCtxBuilder, rustler::Error> {
-    if let Ok(resource) = pipe_from_wasi_options(options, "stdout", &env) {
-        let pipe = resource.pipe.lock().map_err(|_e| {
-            rustler::Error::Term(Box::new(
-                "Could not unlock resource as the mutex was poisoned.",
-            ))
-        })?;
-        return Ok(builder.stdout(Box::new(pipe.clone())));
-    }
-    Ok(builder)
-}
-
-fn wasi_stdin(
-    options: Term,
-    env: RustlerEnv,
-    builder: WasiCtxBuilder,
-) -> Result<WasiCtxBuilder, rustler::Error> {
-    if let Ok(resource) = pipe_from_wasi_options(options, "stdin", &env) {
-        let pipe = resource.pipe.lock().map_err(|_e| {
-            rustler::Error::Term(Box::new(
-                "Could not unlock resource as the mutex was poisoned.",
-            ))
-        })?;
-        return Ok(builder.stdin(Box::new(pipe.clone())));
-    }
-    Ok(builder)
-}
-
-fn pipe_from_wasi_options(
-    options: Term,
-    key: &str,
-    env: &rustler::Env,
-) -> Result<ResourceArc<PipeResource>, rustler::Error> {
-    options
-        .map_get(key.encode(*env))
-        .and_then(|pipe_term| pipe_term.map_get(atoms::resource().encode(*env)))
-        .and_then(|term| term.decode::<ResourceArc<PipeResource>>())
+    linker.instantiate(store, module).map_err(|err| Error::RaiseTerm(Box::new(format!("Cannot instantiate: {}", err))))
 }
 
 #[rustler::nif(name = "instance_function_export_exists")]
 pub fn function_export_exists(
-    resource: ResourceArc<InstanceResource>,
+    store_resource: ResourceArc<StoreResource>,
+    instance_resource: ResourceArc<InstanceResource>,
     function_name: String,
 ) -> NifResult<bool> {
     let instance: Instance =
-        *(resource.instance.lock().map_err(|e| {
+        *(instance_resource.inner.lock().map_err(|e| {
             rustler::Error::Term(Box::new(format!(
                 "Could not unlock instance resource as the mutex was poisoned: {}",
                 e
             )))
         })?);
-    let mut store =
-    resource.store.lock().map_err(|e| {
+    let store: &mut WasmexStore =
+    &mut *(store_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock instance/store resource as the mutex was poisoned: {}",
             e
         )))
-    })?;
+    })?);
 
-    let result = match &mut *store {
+    let result = match store {
         WasmexStore::Plain(store) => functions::exists(&instance, store, &function_name),
         WasmexStore::Wasi(store) => functions::exists(&instance, store, &function_name),
     };
@@ -291,7 +180,8 @@ pub fn function_export_exists(
 #[rustler::nif(name = "instance_call_exported_function", schedule = "DirtyCpu")]
 pub fn call_exported_function<'a>(
     env: rustler::Env<'a>,
-    resource: ResourceArc<InstanceResource>,
+    store_resource: ResourceArc<StoreResource>,
+    instance_resource: ResourceArc<InstanceResource>,
     function_name: String,
     params: Term,
     from: Term,
@@ -305,7 +195,7 @@ pub fn call_exported_function<'a>(
 
     thread::spawn(move || {
         thread_env.send_and_clear(&pid, |thread_env| {
-            execute_function(thread_env, resource, function_name, function_params, from)
+            execute_function(thread_env, store_resource, instance_resource, function_name, function_params, from)
         })
     });
 
@@ -314,7 +204,8 @@ pub fn call_exported_function<'a>(
 
 fn execute_function(
     thread_env: RustlerEnv,
-    resource: ResourceArc<InstanceResource>,
+    store_resource: ResourceArc<StoreResource>,
+    instance_resource: ResourceArc<InstanceResource>,
     function_name: String,
     function_params: SavedTerm,
     from: SavedTerm,
@@ -327,8 +218,8 @@ fn execute_function(
         Ok(vec) => vec,
         Err(_) => return make_error_tuple(&thread_env, "could not load 'function params'", from),
     };
-    let instance: Instance =  *(resource.instance.lock().unwrap());
-    let mut store = resource.store.lock().unwrap();
+    let instance: Instance =  *(instance_resource.inner.lock().unwrap());
+    let mut store = store_resource.inner.lock().unwrap();
     let function_result = match &mut *store {
         WasmexStore::Plain(store) => functions::find(&instance, store, &function_name),
         WasmexStore::Wasi(store) => functions::find(&instance, store, &function_name),

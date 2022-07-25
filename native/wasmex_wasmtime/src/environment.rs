@@ -141,7 +141,7 @@ fn link_imported_function<T>(
                 let callback_context = Term::map_new(env);
 
                 let memory_resource = ResourceArc::new(MemoryResource {
-                    memory: Mutex::new(memory),
+                    inner: Mutex::new(memory),
                 });
                 let callback_context = match Term::map_put(
                     callback_context,

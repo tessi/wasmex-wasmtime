@@ -13,7 +13,7 @@ use wasmtime::{
 use crate::atoms;
 
 pub struct ModuleResource {
-    pub module: Mutex<Module>,
+    pub inner: Mutex<Module>,
 }
 
 #[derive(NifTuple)]
@@ -32,7 +32,7 @@ pub fn compile(binary: Binary) -> NifResult<ModuleResourceResponse> {
     match Module::new(&engine, bytes) {
         Ok(module) => {
             let resource = ResourceArc::new(ModuleResource {
-                module: Mutex::new(module),
+                inner: Mutex::new(module),
             });
             Ok(ModuleResourceResponse {
                 ok: atoms::ok(),
@@ -48,7 +48,7 @@ pub fn compile(binary: Binary) -> NifResult<ModuleResourceResponse> {
 
 #[rustler::nif(name = "module_name")]
 pub fn name(resource: ResourceArc<ModuleResource>) -> NifResult<String> {
-    let module = resource.module.lock().map_err(|e| {
+    let module = resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -62,7 +62,7 @@ pub fn name(resource: ResourceArc<ModuleResource>) -> NifResult<String> {
 
 #[rustler::nif(name = "module_exports")]
 pub fn exports(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifResult<Term> {
-    let module = resource.module.lock().map_err(|e| {
+    let module = resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -84,7 +84,7 @@ pub fn exports(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifR
 
 #[rustler::nif(name = "module_imports")]
 pub fn imports(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifResult<Term> {
-    let module = resource.module.lock().map_err(|e| {
+    let module = resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -230,7 +230,7 @@ fn memory_info<'a>(env: rustler::Env<'a>, memory_type: &MemoryType) -> Term<'a> 
 
 #[rustler::nif(name = "module_serialize")]
 pub fn serialize(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifResult<Binary> {
-    let module = resource.module.lock().map_err(|e| {
+    let module = resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -259,7 +259,7 @@ pub fn unsafe_deserialize(binary: Binary) -> NifResult<ModuleResourceResponse> {
         })?
     };
     let resource = ResourceArc::new(ModuleResource {
-        module: Mutex::new(module),
+        inner: Mutex::new(module),
     });
     Ok(ModuleResourceResponse {
         ok: atoms::ok(),

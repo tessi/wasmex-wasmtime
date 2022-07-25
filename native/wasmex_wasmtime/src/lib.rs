@@ -6,6 +6,7 @@ pub mod memory;
 pub mod module;
 pub mod pipe;
 pub mod printable_term_type;
+pub mod store;
 
 extern crate lazy_static;
 #[macro_use]
@@ -38,7 +39,9 @@ rustler::init! {
         pipe::read_binary,
         pipe::set_len,
         pipe::size,
-        pipe::write_binary
+        pipe::write_binary,
+        store::new,
+        store::new_wasi,
     ],
     load = on_load
 }
@@ -49,5 +52,6 @@ fn on_load(env: Env, _info: Term) -> bool {
     rustler::resource!(memory::MemoryResource, env);
     rustler::resource!(module::ModuleResource, env);
     rustler::resource!(pipe::PipeResource, env);
+    rustler::resource!(store::StoreResource, env);
     true
 }
