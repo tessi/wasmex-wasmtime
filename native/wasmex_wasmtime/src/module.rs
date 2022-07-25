@@ -6,8 +6,7 @@ use rustler::{
 use std::{collections::HashMap, sync::Mutex};
 
 use wasmtime::{
-    Engine, ExternType, FuncType, GlobalType, MemoryType, Module, Mutability, TableType,
-    ValType,
+    Engine, ExternType, FuncType, GlobalType, MemoryType, Module, Mutability, TableType, ValType,
 };
 
 use crate::atoms;

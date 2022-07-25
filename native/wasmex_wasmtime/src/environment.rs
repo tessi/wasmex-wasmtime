@@ -4,7 +4,7 @@ use rustler::{
     resource::ResourceArc, types::tuple, Atom, Encoder, Error, ListIterator, MapIterator, OwnedEnv,
     Term,
 };
-use wasmtime::{Caller, Extern, FuncType, Trap, Val, ValType, Linker};
+use wasmtime::{Caller, Extern, FuncType, Linker, Trap, Val, ValType};
 
 use crate::{
     atoms,
@@ -99,87 +99,93 @@ fn link_imported_function<T>(
         .collect::<Result<Vec<ValType>, _>>()?;
 
     let signature = FuncType::new(params_signature, results_signature.clone());
-    linker.func_new(
-        &namespace_name.clone(),
-        &import_name.clone(),
-        signature,
-        move |mut caller: Caller<'_, T>, params: &[Val], results: &mut [Val]| -> Result<(), Trap> {
-            let callback_token = ResourceArc::new(CallbackTokenResource {
-                token: CallbackToken {
-                    continue_signal: Condvar::new(),
-                    return_types: results_signature.clone(),
-                    return_values: Mutex::new(None),
-                },
-            });
-
-            let memory = match caller.get_export("memory") {
-                Some(Extern::Memory(mem)) => mem,
-                _ => return Err(Trap::new("failed to find host memory")),
-            };
-
-            let mut msg_env = OwnedEnv::new();
-            msg_env.send_and_clear(&pid.clone(), |env| {
-                let mut callback_params: Vec<Term> = Vec::with_capacity(params.len());
-                for value in params {
-                    callback_params.push(match value {
-                        Val::I32(i) => i.encode(env),
-                        Val::I64(i) => i.encode(env),
-                        Val::F32(i) => i.encode(env),
-                        Val::F64(i) => i.encode(env),
-                        // encoding V128 is not yet supported by rustler
-                        Val::V128(_) => (atoms::error(), "unable_to_convert_v128_type").encode(env),
-                        Val::ExternRef(_) => {
-                            (atoms::error(), "unable_to_convert_extern_ref_type").encode(env)
-                        }
-                        Val::FuncRef(_) => {
-                            (atoms::error(), "unable_to_convert_func_ref_type").encode(env)
-                        }
-                    })
-                }
-                // Callback context will contain memory (plus maybe globals, tables etc later).
-                // This will allow Elixir callback to operate on these objects.
-                let callback_context = Term::map_new(env);
-
-                let memory_resource = ResourceArc::new(MemoryResource {
-                    inner: Mutex::new(memory),
+    linker
+        .func_new(
+            &namespace_name.clone(),
+            &import_name.clone(),
+            signature,
+            move |mut caller: Caller<'_, T>,
+                  params: &[Val],
+                  results: &mut [Val]|
+                  -> Result<(), Trap> {
+                let callback_token = ResourceArc::new(CallbackTokenResource {
+                    token: CallbackToken {
+                        continue_signal: Condvar::new(),
+                        return_types: results_signature.clone(),
+                        return_values: Mutex::new(None),
+                    },
                 });
-                let callback_context = match Term::map_put(
-                    callback_context,
-                    atoms::memory().encode(env),
-                    memory_resource.encode(env),
-                ) {
-                    Ok(map) => map,
-                    _ => unreachable!(),
+
+                let memory = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return Err(Trap::new("failed to find host memory")),
                 };
-                (
-                    atoms::invoke_callback(),
-                    namespace_name.clone(),
-                    import_name.clone(),
-                    callback_context,
-                    callback_params,
-                    callback_token.clone(),
-                )
-                    .encode(env)
-            });
 
-            // Wait for the thread to start up - `receive_callback_result` is responsible for that.
-            let mut result = callback_token.token.return_values.lock().unwrap();
-            while result.is_none() {
-                result = callback_token.token.continue_signal.wait(result).unwrap();
-            }
+                let mut msg_env = OwnedEnv::new();
+                msg_env.send_and_clear(&pid.clone(), |env| {
+                    let mut callback_params: Vec<Term> = Vec::with_capacity(params.len());
+                    for value in params {
+                        callback_params.push(match value {
+                            Val::I32(i) => i.encode(env),
+                            Val::I64(i) => i.encode(env),
+                            Val::F32(i) => i.encode(env),
+                            Val::F64(i) => i.encode(env),
+                            // encoding V128 is not yet supported by rustler
+                            Val::V128(_) => {
+                                (atoms::error(), "unable_to_convert_v128_type").encode(env)
+                            }
+                            Val::ExternRef(_) => {
+                                (atoms::error(), "unable_to_convert_extern_ref_type").encode(env)
+                            }
+                            Val::FuncRef(_) => {
+                                (atoms::error(), "unable_to_convert_func_ref_type").encode(env)
+                            }
+                        })
+                    }
+                    // Callback context will contain memory (plus maybe globals, tables etc later).
+                    // This will allow Elixir callback to operate on these objects.
+                    let callback_context = Term::map_new(env);
 
-            let result: &(bool, Vec<WasmValue>) = result
-                .as_ref()
-                .expect("expect callback token to contain a result");
-            match result {
-                (true, return_values) => write_results(results, return_values),
-                (false, _) => Err(Trap::new("the elixir callback threw an exception")),
-            }
-        },
-    ).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+                    let memory_resource = ResourceArc::new(MemoryResource {
+                        inner: Mutex::new(memory),
+                    });
+                    let callback_context = match Term::map_put(
+                        callback_context,
+                        atoms::memory().encode(env),
+                        memory_resource.encode(env),
+                    ) {
+                        Ok(map) => map,
+                        _ => unreachable!(),
+                    };
+                    (
+                        atoms::invoke_callback(),
+                        namespace_name.clone(),
+                        import_name.clone(),
+                        callback_context,
+                        callback_params,
+                        callback_token.clone(),
+                    )
+                        .encode(env)
+                });
+
+                // Wait for the thread to start up - `receive_callback_result` is responsible for that.
+                let mut result = callback_token.token.return_values.lock().unwrap();
+                while result.is_none() {
+                    result = callback_token.token.continue_signal.wait(result).unwrap();
+                }
+
+                let result: &(bool, Vec<WasmValue>) = result
+                    .as_ref()
+                    .expect("expect callback token to contain a result");
+                match result {
+                    (true, return_values) => write_results(results, return_values),
+                    (false, _) => Err(Trap::new("the elixir callback threw an exception")),
+                }
+            },
+        )
+        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
 
     Ok(())
-
 }
 
 fn write_results(results: &mut [Val], return_values: &Vec<WasmValue>) -> Result<(), Trap> {
