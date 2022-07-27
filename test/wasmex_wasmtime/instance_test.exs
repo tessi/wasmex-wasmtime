@@ -102,10 +102,7 @@ defmodule WasmexWasmtime.InstanceTest do
                )
 
       receive do
-        {:returned_function_call,
-         {:error, "Error during function excecution: `expected 1 results, got 0`."},
-         :fake_from} ->
-          nil
+        {:returned_function_call, {:ok, '*'}, :fake_from} -> nil
       after
         2000 ->
           raise "message_expected"
@@ -178,29 +175,13 @@ defmodule WasmexWasmtime.InstanceTest do
         )
 
       receive do
-        {:returned_function_call,
-         {:error, "Error during function excecution: `expected 1 results, got 0`."},
-         :fake_from} ->
+        {:invoke_callback, "env", "imported_sum3", %{memory: _reference}, [1, 2, 3], _token} ->
           nil
-      after
-        2000 -> raise("must receive error message")
-      end
 
-      :ok =
-        WasmexWasmtime.Instance.call_exported_function(
-          store,
-          instance,
-          "imported_sumf",
-          [1.1, 2.2],
-          :fake_from
-        )
-
-      receive do
-        {:returned_function_call, {:error, "exported function `imported_sumf` not found"},
-         :fake_from} ->
-          nil
+        _ ->
+          raise "should not be able to return results with the wrong type"
       after
-        2000 -> raise("must receive error message")
+        2000 -> raise("must receive response")
       end
     end
   end

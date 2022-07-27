@@ -28,15 +28,12 @@ pub fn from_instance(
 ) -> rustler::NifResult<MemoryResourceResponse> {
     let instance: Instance = *(instance_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
-            "Could not unlock instance resource as the mutex was poisoned: {}",
+            "Could not unlock instance resource: {}",
             e
         )))
     })?);
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory = match store {
         WasmexStore::Plain(store) => memory_from_instance(&instance, store)?,
@@ -57,17 +54,11 @@ pub fn length(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
 ) -> NifResult<usize> {
-    let store: &WasmexStore = &*(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+    let store: &WasmexStore = &*(store_resource.inner.try_lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory = memory_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock memory resource as the mutex was poisoned: {}",
-            e
-        )))
+        rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
     })?;
     let length = match store {
         WasmexStore::Plain(store) => memory.data_size(store),
@@ -82,17 +73,11 @@ pub fn grow(
     memory_resource: ResourceArc<MemoryResource>,
     pages: u64,
 ) -> NifResult<u64> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+    let store: &mut WasmexStore = &mut *(store_resource.inner.try_lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory = memory_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock memory resource as the mutex was poisoned: {}",
-            e
-        )))
+        rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
     })?;
     let old_pages = match store {
         WasmexStore::Plain(store) => grow_by_pages(&memory, store, pages),
@@ -118,18 +103,12 @@ pub fn get_byte(
     memory_resource: ResourceArc<MemoryResource>,
     index: usize,
 ) -> NifResult<u8> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+    let store: &WasmexStore = &*(store_resource.inner.try_lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
-    let memory = memory_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock memory resource as the mutex was poisoned: {}",
-            e
-        )))
-    })?;
+    let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
+    })?);
 
     let mut buffer = [0];
     match store {
@@ -148,18 +127,12 @@ pub fn set_byte(
     index: usize,
     value: Term,
 ) -> NifResult<Atom> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+    let store: &mut WasmexStore = &mut *(store_resource.inner.try_lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
-    let memory = memory_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock memory resource as the mutex was poisoned: {}",
-            e
-        )))
-    })?;
+    let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
+    })?);
     let value = value.decode()?;
     match store {
         WasmexStore::Plain(store) => memory.write(store, index, &[value]),
@@ -185,18 +158,12 @@ pub fn read_binary(
     index: usize,
     len: usize,
 ) -> NifResult<Binary> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+    let store: &WasmexStore = &*(store_resource.inner.try_lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
-    let memory = memory_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock memory resource as the mutex was poisoned: {}",
-            e
-        )))
-    })?;
+    let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
+    })?);
     let mut buffer = vec![0u8; len];
 
     match store {
@@ -218,18 +185,12 @@ pub fn write_binary(
     index: usize,
     binary: Binary,
 ) -> NifResult<Atom> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
+    let store: &mut WasmexStore = &mut *(store_resource.inner.try_lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
-    let memory = memory_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock memory resource as the mutex was poisoned: {}",
-            e
-        )))
-    })?;
+    let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
+    })?);
     match store {
         WasmexStore::Plain(store) => memory.write(store, index, binary.as_slice()),
         WasmexStore::Wasi(store) => memory.write(store, index, binary.as_slice()),

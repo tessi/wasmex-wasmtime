@@ -104,7 +104,10 @@ defmodule WasmexWasmtimeTest do
       assert WasmexWasmtime.Memory.read_string(store, memory, pointer, 13) == "Hello, World!"
     end
 
-    test "call_function: string_first_byte(string_pointer) -> u8 function", %{store: store, instance: instance} do
+    test "call_function: string_first_byte(string_pointer) -> u8 function", %{
+      store: store,
+      instance: instance
+    } do
       {:ok, memory} = WasmexWasmtime.memory(instance)
       string = "hello, world"
       index = 42
@@ -118,8 +121,10 @@ defmodule WasmexWasmtimeTest do
     end
   end
 
+  # deadlocks
   test "read and manipulate memory in a callback" do
     %{store: store, module: module} = TestHelper.wasm_import_module()
+
     imports = %{
       env:
         TestHelper.default_imported_functions_env()
@@ -136,9 +141,7 @@ defmodule WasmexWasmtimeTest do
     }
 
     instance =
-      start_supervised!(
-        {WasmexWasmtime, %{store: store, module: module, imports: imports}}
-      )
+      start_supervised!({WasmexWasmtime, %{store: store, module: module, imports: imports}})
 
     {:ok, memory} = WasmexWasmtime.memory(instance)
     WasmexWasmtime.Memory.set_byte(store, memory, 0, 42)
@@ -154,12 +157,11 @@ defmodule WasmexWasmtimeTest do
       imports = %{
         env: TestHelper.default_imported_functions_env()
       }
+
       %{store: store, module: module} = TestHelper.wasm_import_module()
 
       instance =
-        start_supervised!(
-          {WasmexWasmtime, %{store: store, module: module, imports: imports}}
-        )
+        start_supervised!({WasmexWasmtime, %{store: store, module: module, imports: imports}})
 
       %{store: store, module: module, imports: imports, instance: instance}
     end
@@ -196,10 +198,9 @@ defmodule WasmexWasmtimeTest do
       }
 
       %{store: store, module: module} = TestHelper.wasm_import_module()
+
       instance =
-        start_supervised!(
-          {WasmexWasmtime, %{store: store, module: module, imports: imports}}
-        )
+        start_supervised!({WasmexWasmtime, %{store: store, module: module, imports: imports}})
 
       %{store: store, module: module, instance: instance}
     end
@@ -226,12 +227,11 @@ defmodule WasmexWasmtimeTest do
           imported_void: {:fn, [], [], fn _context -> raise("oops") end}
         }
       }
+
       %{store: store, module: module} = TestHelper.wasm_import_module()
 
       instance =
-        start_supervised!(
-          {WasmexWasmtime, %{store: store, module: module, imports: imports}}
-        )
+        start_supervised!({WasmexWasmtime, %{store: store, module: module, imports: imports}})
 
       %{store: store, module: module, instance: instance}
     end
@@ -245,7 +245,7 @@ defmodule WasmexWasmtimeTest do
                WasmexWasmtime.call_function(instance, "using_imported_sum3", [1, 2, 3])
 
       assert reason =~
-               "Error during function excecution: `RuntimeError: the elixir callback threw an exception`."
+               "Error during function excecution: `the elixir callback threw an exception`."
     end
   end
 end

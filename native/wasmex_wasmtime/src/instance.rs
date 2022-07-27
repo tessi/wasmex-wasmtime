@@ -202,8 +202,12 @@ fn execute_function(
         Ok(vec) => map_wasm_values_to_vals(&vec),
         Err(reason) => return make_error_tuple(&thread_env, &reason, from),
     };
-    
-    let mut results = Vec::new();
+    let results_count = match &*store {
+        WasmexStore::Plain(store) => function.ty(store).results().len(),
+        WasmexStore::Wasi(store) => function.ty(store).results().len(),
+    };
+
+    let mut results = vec![Val::null(); results_count];
     let call_result = match &mut *store {
         WasmexStore::Plain(store) => function.call(store, function_params.as_slice(), &mut results),
         WasmexStore::Wasi(store) => function.call(store, function_params.as_slice(), &mut results),
@@ -218,13 +222,13 @@ fn execute_function(
             )
         }
     };
-    let mut return_values: Vec<Term> = Vec::with_capacity(results.len());
+    let mut return_values: Vec<Term> = Vec::with_capacity(results_count);
     for value in results.iter().cloned() {
         return_values.push(match value {
             Val::I32(i) => i.encode(thread_env),
             Val::I64(i) => i.encode(thread_env),
-            Val::F32(i) => i.encode(thread_env),
-            Val::F64(i) => i.encode(thread_env),
+            Val::F32(i) => f32::from_bits(i).encode(thread_env),
+            Val::F64(i) => f64::from_bits(i).encode(thread_env),
             // encoding V128 is not yet supported by rustler
             Val::V128(_) => {
                 return make_error_tuple(&thread_env, "unable_to_return_v128_type", from)
@@ -342,10 +346,10 @@ pub fn map_wasm_values_to_vals(values: &[WasmValue]) -> Vec<Val> {
     values
         .iter()
         .map(|value| match value {
-            WasmValue::I32(value) => Val::I32(*value),
-            WasmValue::I64(value) => Val::I64(*value),
-            WasmValue::F32(value) => Val::F32(value.to_bits()),
-            WasmValue::F64(value) => Val::F64(value.to_bits()),
+            WasmValue::I32(value) => (*value).into(),
+            WasmValue::I64(value) => (*value).into(),
+            WasmValue::F32(value) => (*value).into(),
+            WasmValue::F64(value) => (*value).into(),
         })
         .collect()
 }
@@ -377,10 +381,11 @@ pub fn receive_callback_result(
         let return_types = token_resource.token.return_types.clone();
         match decode_function_param_terms(&return_types, result_list.collect()) {
             Ok(v) => v,
-            Err(_reason) => {
-                return Err(Error::Atom(
-                    "could not convert callback result param to expected return signature",
-                ));
+            Err(reason) => {
+                return Err(Error::Term(Box::new(format!(
+                    "could not convert callback result param to expected return signature: {}",
+                    reason
+                ))));
             }
         }
     } else {

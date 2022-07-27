@@ -128,8 +128,8 @@ fn link_imported_function<T>(
                         callback_params.push(match value {
                             Val::I32(i) => i.encode(env),
                             Val::I64(i) => i.encode(env),
-                            Val::F32(i) => i.encode(env),
-                            Val::F64(i) => i.encode(env),
+                            Val::F32(i) => f32::from_bits(*i).encode(env),
+                            Val::F64(i) => f64::from_bits(*i).encode(env),
                             // encoding V128 is not yet supported by rustler
                             Val::V128(_) => {
                                 (atoms::error(), "unable_to_convert_v128_type").encode(env)
