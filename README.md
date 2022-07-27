@@ -1,16 +1,4 @@
-<p align="center">
-  <img width="300" src="./logo.svg" alt="Wasmex logo">
-</p>
-<p align="center">
-  <a href="https://github.com/tessi/wasmex-wasmtime/blob/master/LICENSE">
-    <img src="https://img.shields.io/github/license/tessi/wasmex-wasmtime.svg" alt="License">
-  </a>
-  <a href="https://github.com/tessi/wasmex-wasmtime/actions/workflows/elixir-ci.yaml">
-    <img src="https://github.com/tessi/wasmex-wasmtime/actions/workflows/elixir-ci.yaml/badge.svg?branch=main" alt="CI">
-  </a>
-</p>
-
-This is an experiment to see what it takes to implement [wasmex](https://github.com/tessi/wasmex) for [wasmtime](https://wasmtime.dev/).
+This is an experiment to see what it takes to implement [wasmex](https://github.com/tessi/wasmex) for [wasmtime](https://wasmtime.dev/). It's not usable ffor r production right now.
 
 Main changes to wasmex are:
 
