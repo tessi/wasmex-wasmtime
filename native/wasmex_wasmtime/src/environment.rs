@@ -183,7 +183,7 @@ fn link_imported_function<T>(
                 }
             },
         )
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(())
 }

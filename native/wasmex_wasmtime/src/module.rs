@@ -9,7 +9,7 @@ use wasmtime::{
     Engine, ExternType, FuncType, GlobalType, MemoryType, Module, Mutability, TableType, ValType,
 };
 
-use crate::atoms;
+use crate::{atoms, store::{StoreResource, WasmexStore}};
 
 pub struct ModuleResource {
     pub inner: Mutex<Module>,
@@ -22,13 +22,22 @@ pub struct ModuleResourceResponse {
 }
 
 #[rustler::nif(name = "module_compile")]
-pub fn compile(binary: Binary) -> NifResult<ModuleResourceResponse> {
+pub fn compile(store_resource: ResourceArc<StoreResource>, binary: Binary) -> NifResult<ModuleResourceResponse> {
+    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
+        rustler::Error::Term(Box::new(format!(
+            "Could not unlock store resource as the mutex was poisoned: {}",
+            e
+        )))
+    })?);
+    let engine = match store {
+        WasmexStore::Plain(store) => store.engine(),
+        WasmexStore::Wasi(store) => store.engine(),
+    };
     let bytes = binary.as_slice();
     let bytes = wat::parse_bytes(bytes).map_err(|e| {
         rustler::Error::Term(Box::new(format!("Error while parsing bytes: {}.", e)))
     })?;
-    let engine = Engine::default();
-    match Module::new(&engine, bytes) {
+    match Module::new(engine, bytes) {
         Ok(module) => {
             let resource = ResourceArc::new(ModuleResource {
                 inner: Mutex::new(module),
@@ -46,8 +55,8 @@ pub fn compile(binary: Binary) -> NifResult<ModuleResourceResponse> {
 }
 
 #[rustler::nif(name = "module_name")]
-pub fn name(resource: ResourceArc<ModuleResource>) -> NifResult<String> {
-    let module = resource.inner.lock().map_err(|e| {
+pub fn name(module_resource: ResourceArc<ModuleResource>) -> NifResult<String> {
+    let module = module_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -60,8 +69,8 @@ pub fn name(resource: ResourceArc<ModuleResource>) -> NifResult<String> {
 }
 
 #[rustler::nif(name = "module_exports")]
-pub fn exports(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifResult<Term> {
-    let module = resource.inner.lock().map_err(|e| {
+pub fn exports(env: rustler::Env, module_resource: ResourceArc<ModuleResource>) -> NifResult<Term> {
+    let module = module_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -82,8 +91,8 @@ pub fn exports(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifR
 }
 
 #[rustler::nif(name = "module_imports")]
-pub fn imports(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifResult<Term> {
-    let module = resource.inner.lock().map_err(|e| {
+pub fn imports(env: rustler::Env, module_resource: ResourceArc<ModuleResource>) -> NifResult<Term> {
+    let module = module_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e
@@ -228,8 +237,8 @@ fn memory_info<'a>(env: rustler::Env<'a>, memory_type: &MemoryType) -> Term<'a> 
 }
 
 #[rustler::nif(name = "module_serialize")]
-pub fn serialize(env: rustler::Env, resource: ResourceArc<ModuleResource>) -> NifResult<Binary> {
-    let module = resource.inner.lock().map_err(|e| {
+pub fn serialize(env: rustler::Env, module_resource: ResourceArc<ModuleResource>) -> NifResult<Binary> {
+    let module = module_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
             "Could not unlock module resource as the mutex was poisoned: {}",
             e

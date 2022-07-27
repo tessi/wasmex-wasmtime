@@ -67,3 +67,11 @@ defmodule WasmexWasmtime.Pipe do
     WasmexWasmtime.Native.pipe_write_binary(resource, binary)
   end
 end
+
+defimpl Inspect, for: WasmexWasmtime.Pipe do
+  import Inspect.Algebra
+
+  def inspect(dict, opts) do
+    concat(["#WasmexWasmtime.Pipe<", to_doc(dict.reference, opts), ">"])
+  end
+end

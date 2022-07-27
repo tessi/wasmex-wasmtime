@@ -113,7 +113,9 @@ defmodule WasiTest do
   test "file system access without preopened dirs" do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
     wasi = %{args: ["list_files", "src"], stdout: stdout}
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     assert WasmexWasmtime.Pipe.read(stdout) == "Could not find directory src\n"
@@ -128,7 +130,8 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:read]}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     assert WasmexWasmtime.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
@@ -143,7 +146,8 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:read], alias: "aliased_src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     assert WasmexWasmtime.Pipe.read(stdout) == "\"aliased_src/main.rs\"\n"
@@ -158,7 +162,8 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:read], alias: "src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     {:ok, expected_content} = File.read("test/wasi_test/src/main.rs")
@@ -174,7 +179,8 @@ defmodule WasiTest do
       preopen: %{"test/wasi_test/src": %{flags: [:create], alias: "src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -194,7 +200,9 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:write], alias: "src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
@@ -215,7 +223,9 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:read], alias: "src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
@@ -238,7 +248,9 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:create], alias: "src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)
@@ -258,7 +270,9 @@ defmodule WasiTest do
       preopen: %{dir => %{flags: [:read], alias: "src"}}
     }
 
-    instance = start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+    instance =
+      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     {:ok, file_contents} = File.read(filepath)

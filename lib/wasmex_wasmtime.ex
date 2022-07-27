@@ -117,28 +117,36 @@ defmodule WasmexWasmtime do
   def start_link(%{} = opts) when not is_map_key(opts, :imports),
     do: start_link(Map.merge(opts, %{imports: %{}}))
 
+  def start_link(%{} = opts) when is_map_key(opts, :module) and not is_map_key(opts, :store),
+    do: {:error, :must_specify_store_used_to_compile_module}
+
   def start_link(%{wasi: true} = opts), do: start_link(Map.merge(opts, %{wasi: %{}}))
 
   def start_link(%{bytes: bytes} = opts) do
-    with {:ok, module} <- WasmexWasmtime.Module.compile(bytes) do
+    with {:ok, store} <- build_store(opts),
+         {:ok, module} <- WasmexWasmtime.Module.compile(store, bytes) do
       opts
       |> Map.delete(:bytes)
       |> Map.put(:module, module)
+      |> Map.put(:store, store)
       |> start_link()
     end
   end
 
-  def start_link(%{module: module, imports: imports, wasi: wasi})
-      when is_map(imports) and is_map(wasi) do
+  def start_link(%{store: store, module: module, imports: imports}) when is_map(imports) do
     GenServer.start_link(__MODULE__, %{
+      store: store,
       module: module,
-      imports: stringify_keys(imports),
-      wasi: stringify_keys(wasi)
+      imports: stringify_keys(imports)
     })
   end
 
-  def start_link(%{module: module, imports: imports}) when is_map(imports) do
-    GenServer.start_link(__MODULE__, %{module: module, imports: stringify_keys(imports)})
+  defp build_store(opts) do
+    if Map.has_key?(opts, :wasi) do
+      WasmexWasmtime.Store.new_wasi(opts[:wasi])
+    else
+      WasmexWasmtime.Store.new()
+    end
   end
 
   @doc """
@@ -225,18 +233,10 @@ defmodule WasmexWasmtime do
   @doc """
   Finds the exported memory of the given WASM instance and returns it as a `WasmexWasmtime.Memory`.
 
-  The memory is a collection of bytes which can be viewed and interpreted as a sequence of different
-  (data-)`types`:
-
-  * uint8 / int8 - (un-)signed 8-bit integer values
-  * uint16 / int16 - (un-)signed 16-bit integer values
-  * uint32 / int32 - (un-)signed 32-bit integer values
-
-  We can think of it as a list of values of the above type (where each value may be larger than a byte).
-  The `offset` value can be used to start reading the memory starting from the chosen position.
+  The memory is a sequence of bytes.
   """
-  def memory(pid, type, offset) when type in [:uint8, :int8, :uint16, :int16, :uint32, :int32] do
-    GenServer.call(pid, {:memory, type, offset})
+  def memory(pid) do
+    GenServer.call(pid, {:memory})
   end
 
   defp stringify_keys(struct) when is_struct(struct), do: struct
@@ -274,40 +274,38 @@ defmodule WasmexWasmtime do
                 }
   """
   @impl true
-  def init(%{module: module, imports: imports, wasi: wasi})
-      when is_map(imports) and is_map(wasi) do
-    case WasmexWasmtime.Instance.new_wasi(module, imports, wasi) do
-      {:ok, instance} -> {:ok, %{instance: instance, imports: imports, wasi: wasi}}
+  def init(%{store: store, module: module, imports: imports} = state) when is_map(imports) do
+    case WasmexWasmtime.Instance.new(store, module, imports) do
+      {:ok, instance} -> {:ok, Map.merge(state, %{instance: instance})}
       {:error, reason} -> {:error, reason}
     end
   end
 
   @impl true
-  def init(%{module: module, imports: imports}) when is_map(imports) do
-    case WasmexWasmtime.Instance.new(module, imports) do
-      {:ok, instance} -> {:ok, %{instance: instance, imports: imports}}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  @impl true
-  def handle_call({:memory, size, offset}, _from, %{instance: instance} = state)
-      when size in [:uint8, :int8, :uint16, :int16, :uint32, :int32] do
-    case WasmexWasmtime.Memory.from_instance(instance, size, offset) do
+  def handle_call({:memory}, _from, %{store: store, instance: instance} = state) do
+    case WasmexWasmtime.Memory.from_instance(store, instance) do
       {:ok, memory} -> {:reply, {:ok, memory}, state}
       {:error, error} -> {:reply, {:error, error}, state}
     end
   end
 
   @impl true
-  def handle_call({:exported_function_exists, name}, _from, %{instance: instance} = state)
+  def handle_call(
+        {:exported_function_exists, name},
+        _from,
+        %{store: store, instance: instance} = state
+      )
       when is_binary(name) do
-    {:reply, WasmexWasmtime.Instance.function_export_exists(instance, name), state}
+    {:reply, WasmexWasmtime.Instance.function_export_exists(store, instance, name), state}
   end
 
   @impl true
-  def handle_call({:call_function, name, params}, from, %{instance: instance} = state) do
-    :ok = WasmexWasmtime.Instance.call_exported_function(instance, name, params, from)
+  def handle_call(
+        {:call_function, name, params},
+        from,
+        %{store: store, instance: instance} = state
+      ) do
+    :ok = WasmexWasmtime.Instance.call_exported_function(store, instance, name, params, from)
     {:noreply, state}
   end
 
@@ -326,7 +324,7 @@ defmodule WasmexWasmtime do
       Map.put(
         context,
         :memory,
-        WasmexWasmtime.Memory.wrap_resource(Map.get(context, :memory), :uint8, 0)
+        WasmexWasmtime.Memory.wrap_resource(Map.get(context, :memory))
       )
 
     {success, return_value} =
@@ -347,7 +345,7 @@ defmodule WasmexWasmtime do
         _ -> [return_value]
       end
 
-    :ok = WasmexWasmtime.Native.namespace_receive_callback_result(token, success, return_values)
+    :ok = WasmexWasmtime.Native.instance_receive_callback_result(token, success, return_values)
     {:noreply, state}
   end
 end

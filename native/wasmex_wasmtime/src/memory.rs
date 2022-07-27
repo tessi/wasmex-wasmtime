@@ -109,14 +109,14 @@ fn grow_by_pages<T>(
 ) -> Result<u64, Error> {
     memory
         .grow(store, number_of_pages)
-        .map_err(|err| Error::RaiseTerm(Box::new(format!("Failed to grow the memory: {}.", err))))
+        .map_err(|err| Error::Term(Box::new(format!("Failed to grow the memory: {}.", err))))
 }
 
 #[rustler::nif(name = "memory_get_byte")]
 pub fn get_byte(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
-    offset: usize,
+    index: usize,
 ) -> NifResult<u8> {
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!(
@@ -133,10 +133,10 @@ pub fn get_byte(
 
     let mut buffer = [0];
     match store {
-        WasmexStore::Plain(store) => memory.read(store, offset, &mut buffer),
-        WasmexStore::Wasi(store) => memory.read(store, offset, &mut buffer),
+        WasmexStore::Plain(store) => memory.read(store, index, &mut buffer),
+        WasmexStore::Wasi(store) => memory.read(store, index, &mut buffer),
     }
-    .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(buffer[0])
 }
@@ -145,7 +145,7 @@ pub fn get_byte(
 pub fn set_byte(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
-    offset: usize,
+    index: usize,
     value: Term,
 ) -> NifResult<Atom> {
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
@@ -162,10 +162,10 @@ pub fn set_byte(
     })?;
     let value = value.decode()?;
     match store {
-        WasmexStore::Plain(store) => memory.write(store, offset, &[value]),
-        WasmexStore::Wasi(store) => memory.write(store, offset, &[value]),
+        WasmexStore::Plain(store) => memory.write(store, index, &[value]),
+        WasmexStore::Wasi(store) => memory.write(store, index, &[value]),
     }
-    .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(atoms::ok())
 }
@@ -174,7 +174,7 @@ pub fn memory_from_instance<T>(instance: &Instance, store: &mut Store<T>) -> Res
     instance
         .exports(store)
         .find_map(|export| export.into_memory())
-        .ok_or_else(|| Error::RaiseTerm(Box::new("The WebAssembly module has no exported memory.")))
+        .ok_or_else(|| Error::Term(Box::new("The WebAssembly module has no exported memory.")))
 }
 
 #[rustler::nif(name = "memory_read_binary")]
@@ -182,7 +182,7 @@ pub fn read_binary(
     env: rustler::Env,
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
-    offset: usize,
+    index: usize,
     len: usize,
 ) -> NifResult<Binary> {
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
@@ -200,10 +200,10 @@ pub fn read_binary(
     let mut buffer = vec![0u8; len];
 
     match store {
-        WasmexStore::Plain(store) => memory.read(store, offset, &mut buffer),
-        WasmexStore::Wasi(store) => memory.read(store, offset, &mut buffer),
+        WasmexStore::Plain(store) => memory.read(store, index, &mut buffer),
+        WasmexStore::Wasi(store) => memory.read(store, index, &mut buffer),
     }
-    .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     let mut binary = NewBinary::new(env, len);
     binary.as_mut_slice().write_all(&buffer).unwrap();
@@ -215,7 +215,7 @@ pub fn read_binary(
 pub fn write_binary(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
-    offset: usize,
+    index: usize,
     binary: Binary,
 ) -> NifResult<Atom> {
     let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
@@ -231,10 +231,10 @@ pub fn write_binary(
         )))
     })?;
     match store {
-        WasmexStore::Plain(store) => memory.write(store, offset, binary.as_slice()),
-        WasmexStore::Wasi(store) => memory.write(store, offset, binary.as_slice()),
+        WasmexStore::Plain(store) => memory.write(store, index, binary.as_slice()),
+        WasmexStore::Wasi(store) => memory.write(store, index, binary.as_slice()),
     }
-    .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(atoms::ok())
 }

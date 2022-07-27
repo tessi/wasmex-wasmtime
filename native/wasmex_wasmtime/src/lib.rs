@@ -19,7 +19,6 @@ rustler::init! {
     [
         instance::call_exported_function,
         instance::function_export_exists,
-        instance::new_wasi,
         instance::new,
         instance::receive_callback_result,
         memory::from_instance,

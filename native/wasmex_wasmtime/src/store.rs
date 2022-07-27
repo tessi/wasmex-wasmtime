@@ -16,7 +16,6 @@ pub enum WasmexStore {
 
 pub struct StoreResource {
     pub inner: Mutex<WasmexStore>,
-    pub engine: Mutex<Engine>,
 }
 
 #[derive(NifTuple)]
@@ -28,11 +27,10 @@ pub struct StoreResourceResponse {
 #[rustler::nif(name = "store_new")]
 pub fn new() -> NifResult<StoreResourceResponse> {
     let config = Config::new();
-    let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    let engine = Engine::new(&config).map_err(|err| Error::Term(Box::new(err.to_string())))?;
     let store = Store::new(&engine, ());
     let resource = ResourceArc::new(StoreResource {
         inner: Mutex::new(WasmexStore::Plain(store)),
-        engine: Mutex::new(engine),
     });
     Ok(StoreResourceResponse {
         ok: atoms::ok(),
@@ -60,9 +58,9 @@ pub fn new_wasi<'a>(
     // let mut wasi_wasmer_env = create_wasi_env(wasi_args, wasi_env, options, env)?;
     let wasi_ctx_builder = WasiCtxBuilder::new()
         .args(&wasi_args)
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?
         .envs(&wasi_env)
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     let wasi_ctx_builder = wasi_stdin(options, env, wasi_ctx_builder)?;
     let wasi_ctx_builder = wasi_stdout(options, env, wasi_ctx_builder)?;
@@ -70,11 +68,10 @@ pub fn new_wasi<'a>(
     let wasi_ctx_builder = wasi_preopen_directories(options, env, wasi_ctx_builder)?;
 
     let config = Config::new();
-    let engine = Engine::new(&config).map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+    let engine = Engine::new(&config).map_err(|err| Error::Term(Box::new(err.to_string())))?;
     let store = Store::new(&engine, wasi_ctx_builder.build());
     let resource = ResourceArc::new(StoreResource {
         inner: Mutex::new(WasmexStore::Wasi(store)),
-        engine: Mutex::new(engine),
     });
     Ok(StoreResourceResponse {
         ok: atoms::ok(),
@@ -180,6 +177,6 @@ fn preopen_directory(
     };
     let builder = builder
         .preopened_dir(dir, guest_path)
-        .map_err(|err| Error::RaiseTerm(Box::new(err.to_string())))?;
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
     Ok(builder)
 }

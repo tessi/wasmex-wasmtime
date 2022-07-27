@@ -116,21 +116,21 @@ pub fn create() -> PipeResourceResponse {
 }
 
 #[rustler::nif(name = "pipe_size")]
-pub fn size(resource: ResourceArc<PipeResource>) -> u64 {
-    resource.pipe.lock().unwrap().size()
+pub fn size(pipe_resource: ResourceArc<PipeResource>) -> u64 {
+    pipe_resource.pipe.lock().unwrap().size()
 }
 
 #[rustler::nif(name = "pipe_set_len")]
-pub fn set_len(resource: ResourceArc<PipeResource>, len: u64) -> Atom {
-    let mut pipe = resource.pipe.lock().unwrap();
+pub fn set_len(pipe_resource: ResourceArc<PipeResource>, len: u64) -> Atom {
+    let mut pipe = pipe_resource.pipe.lock().unwrap();
 
     pipe.set_len(len);
     atoms::ok()
 }
 
 #[rustler::nif(name = "pipe_read_binary")]
-pub fn read_binary(resource: ResourceArc<PipeResource>) -> String {
-    let mut pipe = resource.pipe.lock().unwrap();
+pub fn read_binary(pipe_resource: ResourceArc<PipeResource>) -> String {
+    let mut pipe = pipe_resource.pipe.lock().unwrap();
     let mut buffer = String::new();
 
     (*pipe).read_to_string(&mut buffer).unwrap();
@@ -140,10 +140,10 @@ pub fn read_binary(resource: ResourceArc<PipeResource>) -> String {
 #[rustler::nif(name = "pipe_write_binary")]
 pub fn write_binary(
     env: rustler::Env,
-    resource: ResourceArc<PipeResource>,
+    pipe_resource: ResourceArc<PipeResource>,
     content: String,
 ) -> Term {
-    let mut pipe = resource.pipe.lock().unwrap();
+    let mut pipe = pipe_resource.pipe.lock().unwrap();
 
     match (*pipe).write(content.as_bytes()) {
         Ok(bytes_written) => (atoms::ok(), bytes_written).encode(env),

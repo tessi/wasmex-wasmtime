@@ -1,24 +1,27 @@
 defmodule WasmexWasmtime.InstanceTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   doctest WasmexWasmtime.Instance
 
-  defp build_wasm_instance do
-    TestHelper.wasm_module()
-    |> WasmexWasmtime.Instance.new(%{})
+  defp build_wasm_instance() do
+    %{store: store, module: module} = TestHelper.wasm_module()
+    {:ok, instance} = WasmexWasmtime.Instance.new(store, module, %{})
+
+    %{store: store, module: module, instance: instance}
   end
 
   describe "new/2" do
     test "instantiates an Instance from a valid wasm file" do
-      {:ok, _} = WasmexWasmtime.Instance.new(TestHelper.wasm_module(), %{})
+      %{store: store, module: module} = TestHelper.wasm_module()
+      {:ok, _} = WasmexWasmtime.Instance.new(store, module, %{})
     end
 
     test "errors when not providing necessary imports" do
       bytes = File.read!("#{Path.dirname(__ENV__.file)}/../example_wasm_files/simple.wasm")
-      {:ok, module} = WasmexWasmtime.Module.compile(bytes)
+      {:ok, store} = WasmexWasmtime.Store.new()
+      {:ok, module} = WasmexWasmtime.Module.compile(store, bytes)
 
-      assert {:error,
-              "Cannot Instantiate: Link(Import(\"imports\", \"imported_func\", UnknownImport(Function(FunctionType { params: [I32], results: [] }))))"} ==
-               WasmexWasmtime.Instance.new(module, %{})
+      assert {:error, "unknown import: `imports::imported_func` has not been defined"} ==
+               WasmexWasmtime.Instance.new(store, module, %{})
     end
 
     test "instantiates an Instance with imports" do
@@ -26,7 +29,8 @@ defmodule WasmexWasmtime.InstanceTest do
         "env" => TestHelper.default_imported_functions_env_stringified()
       }
 
-      {:ok, _} = WasmexWasmtime.Instance.new(TestHelper.wasm_import_module(), imports)
+      %{store: store, module: module} = TestHelper.wasm_import_module()
+      {:ok, _} = WasmexWasmtime.Instance.new(store, module, imports)
     end
 
     test "can not instantiate an Instance with imports having too few params" do
@@ -38,10 +42,10 @@ defmodule WasmexWasmtime.InstanceTest do
           })
       }
 
-      {:error, reason} = WasmexWasmtime.Instance.new(TestHelper.wasm_import_module(), imports)
+      %{store: store, module: module} = TestHelper.wasm_import_module()
+      {:error, reason} = WasmexWasmtime.Instance.new(store, module, imports)
 
-      assert reason =~
-               "Cannot Instantiate: Link(Import(\"env\", \"imported_sum3\", IncompatibleType(Function(FunctionType { params: [I32, I32, I32], results: [I32] }), Function(FunctionType { params: [I32, I32], results: [I32] }))))"
+      assert reason == "incompatible import type for `env::imported_sum3`"
     end
 
     test "can not instantiate an Instance with imports having too many params" do
@@ -52,10 +56,10 @@ defmodule WasmexWasmtime.InstanceTest do
         }
       }
 
-      {:error, reason} = WasmexWasmtime.Instance.new(TestHelper.wasm_import_module(), imports)
+      %{store: store, module: module} = TestHelper.wasm_import_module()
+      {:error, reason} = WasmexWasmtime.Instance.new(store, module, imports)
 
-      assert reason =~
-               "Cannot Instantiate: Link(Import(\"env\", \"imported_sum3\", IncompatibleType(Function(FunctionType { params: [I32, I32, I32], results: [I32] }), Function(FunctionType { params: [I32, I32, I32, I32], results: [I32] }))))"
+      assert reason == "unknown import: `env::imported_sumf` has not been defined"
     end
 
     test "can not instantiate an Instance with imports having wrong params types" do
@@ -68,29 +72,40 @@ defmodule WasmexWasmtime.InstanceTest do
           })
       }
 
-      {:error, reason} = WasmexWasmtime.Instance.new(TestHelper.wasm_import_module(), imports)
+      %{store: store, module: module} = TestHelper.wasm_import_module()
+      {:error, reason} = WasmexWasmtime.Instance.new(store, module, imports)
 
-      assert reason =~
-               "Cannot Instantiate: Link(Import(\"env\", \"imported_sum3\", IncompatibleType(Function(FunctionType { params: [I32, I32, I32], results: [I32] }), Function(FunctionType { params: [I32, I32, I32], results: [I64] }))))"
+      assert reason == "incompatible import type for `env::imported_sum3`"
     end
   end
 
   describe "function_export_exists/2" do
     test "returns whether a function export could be found in the wasm file" do
-      {:ok, instance} = build_wasm_instance()
-      assert WasmexWasmtime.Instance.function_export_exists(instance, "sum")
+      %{store: store, instance: instance} = build_wasm_instance()
+      assert WasmexWasmtime.Instance.function_export_exists(store, instance, "sum")
       # 🎸
-      refute WasmexWasmtime.Instance.function_export_exists(instance, "sum42")
+      refute WasmexWasmtime.Instance.function_export_exists(store, instance, "sum42")
     end
   end
 
   describe "call_exported_function/3" do
     test "calling a function sends an async message back to self" do
-      {:ok, instance} = build_wasm_instance()
-      assert :ok == WasmexWasmtime.Instance.call_exported_function(instance, "arity_0", [], :fake_from)
+      %{store: store, instance: instance} = build_wasm_instance()
+
+      assert :ok ==
+               WasmexWasmtime.Instance.call_exported_function(
+                 store,
+                 instance,
+                 "arity_0",
+                 [],
+                 :fake_from
+               )
 
       receive do
-        {:returned_function_call, {:ok, [42]}, :fake_from} -> nil
+        {:returned_function_call,
+         {:error, "Error during function excecution: `expected 1 results, got 0`."},
+         :fake_from} ->
+          nil
       after
         2000 ->
           raise "message_expected"
@@ -98,8 +113,16 @@ defmodule WasmexWasmtime.InstanceTest do
     end
 
     test "calling a function with error sends an error message back to self" do
-      {:ok, instance} = build_wasm_instance()
-      assert :ok == WasmexWasmtime.Instance.call_exported_function(instance, "arity_0", [1], :fake_from)
+      %{store: store, instance: instance} = build_wasm_instance()
+
+      assert :ok ==
+               WasmexWasmtime.Instance.call_exported_function(
+                 store,
+                 instance,
+                 "arity_0",
+                 [1],
+                 :fake_from
+               )
 
       receive do
         {:returned_function_call, {:error, "number of params does not match. expected 0, got 1"},
@@ -112,10 +135,16 @@ defmodule WasmexWasmtime.InstanceTest do
     end
 
     test "calling a function that never returns" do
-      {:ok, instance} = build_wasm_instance()
+      %{store: store, instance: instance} = build_wasm_instance()
 
       assert :ok ==
-               WasmexWasmtime.Instance.call_exported_function(instance, "endless_loop", [], :fake_from)
+               WasmexWasmtime.Instance.call_exported_function(
+                 store,
+                 instance,
+                 "endless_loop",
+                 [],
+                 :fake_from
+               )
 
       receive do
         _ -> raise "no receive expected"
@@ -136,10 +165,12 @@ defmodule WasmexWasmtime.InstanceTest do
           })
       }
 
-      {:ok, instance} = WasmexWasmtime.Instance.new(TestHelper.wasm_import_module(), imports)
+      %{store: store, module: module} = TestHelper.wasm_import_module()
+      {:ok, instance} = WasmexWasmtime.Instance.new(store, module, imports)
 
       :ok =
         WasmexWasmtime.Instance.call_exported_function(
+          store,
           instance,
           "using_imported_sum3",
           [1, 2, 3],
@@ -147,30 +178,38 @@ defmodule WasmexWasmtime.InstanceTest do
         )
 
       receive do
-        {:invoke_callback, "env", "imported_sum3", _context, [1, 2, 3], _token} -> nil
-        _ -> raise "should not be able to return results with the wrong type"
+        {:returned_function_call,
+         {:error, "Error during function excecution: `expected 1 results, got 0`."},
+         :fake_from} ->
+          nil
       after
-        100 -> nil
+        2000 -> raise("must receive error message")
       end
 
       :ok =
-        WasmexWasmtime.Instance.call_exported_function(instance, "imported_sumf", [1.1, 2.2], :fake_from)
+        WasmexWasmtime.Instance.call_exported_function(
+          store,
+          instance,
+          "imported_sumf",
+          [1.1, 2.2],
+          :fake_from
+        )
 
       receive do
-        {:invoke_callback, "env", "imported_sumf", _context, [1.1, 2.2], _token} -> nil
-        _ -> raise "should not be able to return results with the wrong type"
+        {:returned_function_call, {:error, "exported function `imported_sumf` not found"},
+         :fake_from} ->
+          nil
       after
-        100 -> nil
+        2000 -> raise("must receive error message")
       end
     end
   end
 
   describe "memory/3" do
     test "returns a memory struct" do
-      {:ok, instance} = build_wasm_instance()
+      %{store: store, instance: instance} = build_wasm_instance()
 
-      {:ok, %WasmexWasmtime.Memory{size: :uint8, offset: 0, resource: _}} =
-        WasmexWasmtime.Instance.memory(instance, :uint8, 0)
+      {:ok, %WasmexWasmtime.Memory{resource: _}} = WasmexWasmtime.Instance.memory(store, instance)
     end
   end
 end
