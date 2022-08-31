@@ -97,13 +97,13 @@ defmodule WasmexWasmtime.Memory do
             # accidentally do.
             reference: nil
 
-  @spec from_instance(WasmexWasmtime.Store.t(), WasmexWasmtime.Instance.t()) ::
+  @spec from_instance(WasmexWasmtime.StoreOrCaller.t(), WasmexWasmtime.Instance.t()) ::
           {:ok, t} | {:error, binary()}
-  def from_instance(store, instance) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  def from_instance(store_or_caller, instance) do
+    %{resource: store_or_caller_resource} = store_or_caller
     %WasmexWasmtime.Instance{resource: instance_resource} = instance
 
-    case WasmexWasmtime.Native.memory_from_instance(store_resource, instance_resource) do
+    case WasmexWasmtime.Native.memory_from_instance(store_or_caller_resource, instance_resource) do
       {:ok, memory_resource} -> {:ok, wrap_resource(memory_resource)}
       {:error, err} -> {:error, err}
     end
@@ -144,20 +144,22 @@ defmodule WasmexWasmtime.Memory do
     WasmexWasmtime.Native.memory_grow(store_resource, memory_resource, pages)
   end
 
-  @spec get_byte(WasmexWasmtime.Store.t(), t(), non_neg_integer()) ::
+  @spec get_byte(WasmexWasmtime.StoreOrCaller.t(), t(), non_neg_integer()) ::
           number()
-  def get_byte(store, memory, index) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  def get_byte(store_or_caller, memory, index) do
+    %{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: memory_resource} = memory
-    WasmexWasmtime.Native.memory_get_byte(store_resource, memory_resource, index)
+
+    WasmexWasmtime.Native.memory_get_byte(store_or_caller_resource, memory_resource, index)
   end
 
-  @spec set_byte(WasmexWasmtime.Store.t(), t(), non_neg_integer(), number()) ::
-          number()
-  def set_byte(store, memory, index, value) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  @spec set_byte(WasmexWasmtime.StoreOrCaller.t(), t(), non_neg_integer(), number()) ::
+          :ok | {:error, binary()}
+  def set_byte(store_or_caller, memory, index, value) do
+    %{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: memory_resource} = memory
-    WasmexWasmtime.Native.memory_set_byte(store_resource, memory_resource, index, value)
+
+    WasmexWasmtime.Native.memory_set_byte(store_or_caller_resource, memory_resource, index, value)
   end
 
   @spec write_binary(

@@ -19,6 +19,7 @@ rustler::atoms! {
     v128,
     extern_ref,
     func_ref,
+    caller,
 
     // import objects
     __fn__ = "fn",

@@ -41,15 +41,15 @@ defmodule WasmexWasmtime.Instance do
             # accidentally do.
             reference: nil
 
-  @spec new(WasmexWasmtime.Store.t(), WasmexWasmtime.Module.t(), %{
+  @spec new(WasmexWasmtime.StoreOrCaller.t(), WasmexWasmtime.Module.t(), %{
           optional(binary()) => (... -> any())
         }) ::
           {:ok, __MODULE__.t()} | {:error, binary()}
-  def new(store, module, imports) when is_map(imports) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  def new(store_or_caller, module, imports) when is_map(imports) do
+    %WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource} = store_or_caller
     %WasmexWasmtime.Module{resource: module_resource} = module
 
-    case WasmexWasmtime.Native.instance_new(store_resource, module_resource, imports) do
+    case WasmexWasmtime.Native.instance_new(store_or_caller_resource, module_resource, imports) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
@@ -83,20 +83,20 @@ defmodule WasmexWasmtime.Instance do
   A BadArg exception may be thrown when given unexpected input data.
   """
   @spec call_exported_function(
-          WasmexWasmtime.Store.t(),
+          WasmexWasmtime.StoreOrCaller.t(),
           __MODULE__.t(),
           binary(),
           [any()],
           GenServer.from()
         ) ::
           :ok | {:error, binary()}
-  def call_exported_function(store, instance, name, params, from)
+  def call_exported_function(store_or_caller, instance, name, params, from)
       when is_binary(name) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+    %{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: instance_resource} = instance
 
     WasmexWasmtime.Native.instance_call_exported_function(
-      store_resource,
+      store_or_caller_resource,
       instance_resource,
       name,
       params,

@@ -1,4 +1,5 @@
 pub mod atoms;
+pub mod caller;
 pub mod environment;
 pub mod functions;
 pub mod instance;
@@ -8,7 +9,6 @@ pub mod pipe;
 pub mod printable_term_type;
 pub mod store;
 
-extern crate lazy_static;
 #[macro_use]
 extern crate rustler;
 
@@ -47,6 +47,7 @@ rustler::init! {
 
 fn on_load(env: Env, _info: Term) -> bool {
     rustler::resource!(environment::CallbackTokenResource, env);
+    rustler::resource!(environment::StoreOrCallerResource, env);
     rustler::resource!(instance::InstanceResource, env);
     rustler::resource!(memory::MemoryResource, env);
     rustler::resource!(module::ModuleResource, env);

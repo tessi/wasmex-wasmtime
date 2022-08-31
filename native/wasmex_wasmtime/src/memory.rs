@@ -8,7 +8,8 @@ use rustler::{Atom, Binary, Error, NewBinary, NifResult, Term};
 
 use wasmtime::{Instance, Memory, Store};
 
-use crate::store::{self, StoreResource, WasmexStore};
+use crate::environment::{StoreOrCaller, StoreOrCallerResource};
+use crate::store::{StoreData, StoreResource};
 use crate::{atoms, instance};
 
 pub struct MemoryResource {
@@ -23,7 +24,7 @@ pub struct MemoryResourceResponse {
 
 #[rustler::nif(name = "memory_from_instance")]
 pub fn from_instance(
-    store_resource: ResourceArc<store::StoreResource>,
+    store_or_caller_resource: ResourceArc<StoreOrCallerResource>,
     instance_resource: ResourceArc<instance::InstanceResource>,
 ) -> rustler::NifResult<MemoryResourceResponse> {
     let instance: Instance = *(instance_resource.inner.lock().map_err(|e| {
@@ -32,13 +33,14 @@ pub fn from_instance(
             e
         )))
     })?);
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
-    })?);
-    let memory = match store {
-        WasmexStore::Plain(store) => memory_from_instance(&instance, store)?,
-        WasmexStore::Wasi(store) => memory_from_instance(&instance, store)?,
-    };
+    let store_or_caller: &mut StoreOrCaller =
+        &mut *(store_or_caller_resource.inner.lock().map_err(|e| {
+            rustler::Error::Term(Box::new(format!(
+                "Could not unlock store_or_caller resource: {}",
+                e
+            )))
+        })?);
+    let memory = memory_from_instance(&instance, store_or_caller)?;
     let resource = ResourceArc::new(MemoryResource {
         inner: Mutex::new(memory.to_owned()),
     });
@@ -54,16 +56,13 @@ pub fn length(
     store_resource: ResourceArc<StoreResource>,
     memory_resource: ResourceArc<MemoryResource>,
 ) -> NifResult<usize> {
-    let store: &WasmexStore = &*(store_resource.inner.try_lock().map_err(|e| {
+    let store: &Store<StoreData> = &*(store_resource.inner.try_lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory = memory_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
     })?;
-    let length = match store {
-        WasmexStore::Plain(store) => memory.data_size(store),
-        WasmexStore::Wasi(store) => memory.data_size(store),
-    };
+    let length = memory.data_size(store);
     Ok(length)
 }
 
@@ -73,16 +72,13 @@ pub fn grow(
     memory_resource: ResourceArc<MemoryResource>,
     pages: u64,
 ) -> NifResult<u64> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.try_lock().map_err(|e| {
+    let store: &mut Store<StoreData> = &mut *(store_resource.inner.try_lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory = memory_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
     })?;
-    let old_pages = match store {
-        WasmexStore::Plain(store) => grow_by_pages(&memory, store, pages),
-        WasmexStore::Wasi(store) => grow_by_pages(&memory, store, pages),
-    }?;
+    let old_pages = grow_by_pages(&memory, store, pages)?;
     Ok(old_pages)
 }
 
@@ -99,11 +95,11 @@ fn grow_by_pages<T>(
 
 #[rustler::nif(name = "memory_get_byte")]
 pub fn get_byte(
-    store_resource: ResourceArc<StoreResource>,
+    store_or_caller_resource: ResourceArc<StoreOrCallerResource>,
     memory_resource: ResourceArc<MemoryResource>,
     index: usize,
 ) -> NifResult<u8> {
-    let store: &WasmexStore = &*(store_resource.inner.try_lock().map_err(|e| {
+    let store_or_caller = &*(store_or_caller_resource.inner.try_lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
@@ -111,41 +107,40 @@ pub fn get_byte(
     })?);
 
     let mut buffer = [0];
-    match store {
-        WasmexStore::Plain(store) => memory.read(store, index, &mut buffer),
-        WasmexStore::Wasi(store) => memory.read(store, index, &mut buffer),
-    }
-    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
+    memory
+        .read(store_or_caller, index, &mut buffer)
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(buffer[0])
 }
 
 #[rustler::nif(name = "memory_set_byte")]
 pub fn set_byte(
-    store_resource: ResourceArc<StoreResource>,
+    store_or_caller_resource: ResourceArc<StoreOrCallerResource>,
     memory_resource: ResourceArc<MemoryResource>,
     index: usize,
     value: Term,
 ) -> NifResult<Atom> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.try_lock().map_err(|e| {
+    let store_or_caller = &mut *(store_or_caller_resource.inner.try_lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
     })?);
     let value = value.decode()?;
-    match store {
-        WasmexStore::Plain(store) => memory.write(store, index, &[value]),
-        WasmexStore::Wasi(store) => memory.write(store, index, &[value]),
-    }
-    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
+    memory
+        .write(store_or_caller, index, &[value])
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(atoms::ok())
 }
 
-pub fn memory_from_instance<T>(instance: &Instance, store: &mut Store<T>) -> Result<Memory, Error> {
+pub fn memory_from_instance(
+    instance: &Instance,
+    store_or_caller: &mut StoreOrCaller,
+) -> Result<Memory, Error> {
     instance
-        .exports(store)
+        .exports(store_or_caller)
         .find_map(|export| export.into_memory())
         .ok_or_else(|| Error::Term(Box::new("The WebAssembly module has no exported memory.")))
 }
@@ -158,7 +153,7 @@ pub fn read_binary(
     index: usize,
     len: usize,
 ) -> NifResult<Binary> {
-    let store: &WasmexStore = &*(store_resource.inner.try_lock().map_err(|e| {
+    let store: &Store<StoreData> = &*(store_resource.inner.try_lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
@@ -166,11 +161,9 @@ pub fn read_binary(
     })?);
     let mut buffer = vec![0u8; len];
 
-    match store {
-        WasmexStore::Plain(store) => memory.read(store, index, &mut buffer),
-        WasmexStore::Wasi(store) => memory.read(store, index, &mut buffer),
-    }
-    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
+    memory
+        .read(store, index, &mut buffer)
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     let mut binary = NewBinary::new(env, len);
     binary.as_mut_slice().write_all(&buffer).unwrap();
@@ -185,17 +178,15 @@ pub fn write_binary(
     index: usize,
     binary: Binary,
 ) -> NifResult<Atom> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.try_lock().map_err(|e| {
+    let store: &mut Store<StoreData> = &mut *(store_resource.inner.try_lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock store resource: {}", e)))
     })?);
     let memory: &Memory = &*(memory_resource.inner.lock().map_err(|e| {
         rustler::Error::Term(Box::new(format!("Could not unlock memory resource: {}", e)))
     })?);
-    match store {
-        WasmexStore::Plain(store) => memory.write(store, index, binary.as_slice()),
-        WasmexStore::Wasi(store) => memory.write(store, index, binary.as_slice()),
-    }
-    .map_err(|err| Error::Term(Box::new(err.to_string())))?;
+    memory
+        .write(store, index, binary.as_slice())
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
 
     Ok(atoms::ok())
 }

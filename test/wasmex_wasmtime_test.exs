@@ -132,9 +132,9 @@ defmodule WasmexWasmtimeTest do
           :imported_sum3,
           {:fn, [:i32, :i32, :i32], [:i32],
            fn context, a, b, c ->
-             memory = Map.get(context, :memory)
-             assert 42 == WasmexWasmtime.Memory.get_byte(store, memory, 0)
-             WasmexWasmtime.Memory.set_byte(store, memory, 0, 23)
+             IO.inspect(context)
+             assert 42 == WasmexWasmtime.Memory.get_byte(context.caller, context.memory, 0)
+             WasmexWasmtime.Memory.set_byte(context.caller, context.memory, 0, 23)
              a + b + c
            end}
         )

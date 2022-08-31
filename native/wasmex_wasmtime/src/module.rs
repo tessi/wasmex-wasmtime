@@ -11,7 +11,7 @@ use wasmtime::{
 
 use crate::{
     atoms,
-    store::{StoreResource, WasmexStore},
+    environment::{StoreOrCaller, StoreOrCallerResource},
 };
 
 pub struct ModuleResource {
@@ -26,24 +26,21 @@ pub struct ModuleResourceResponse {
 
 #[rustler::nif(name = "module_compile")]
 pub fn compile(
-    store_resource: ResourceArc<StoreResource>,
+    store_or_caller_resource: ResourceArc<StoreOrCallerResource>,
     binary: Binary,
 ) -> NifResult<ModuleResourceResponse> {
-    let store: &mut WasmexStore = &mut *(store_resource.inner.lock().map_err(|e| {
-        rustler::Error::Term(Box::new(format!(
-            "Could not unlock store resource as the mutex was poisoned: {}",
-            e
-        )))
-    })?);
-    let engine = match store {
-        WasmexStore::Plain(store) => store.engine(),
-        WasmexStore::Wasi(store) => store.engine(),
-    };
+    let store_or_caller: &mut StoreOrCaller =
+        &mut *(store_or_caller_resource.inner.lock().map_err(|e| {
+            rustler::Error::Term(Box::new(format!(
+                "Could not unlock store_or_caller resource as the mutex was poisoned: {}",
+                e
+            )))
+        })?);
     let bytes = binary.as_slice();
     let bytes = wat::parse_bytes(bytes).map_err(|e| {
         rustler::Error::Term(Box::new(format!("Error while parsing bytes: {}.", e)))
     })?;
-    match Module::new(engine, bytes) {
+    match Module::new(store_or_caller.engine(), bytes) {
         Ok(module) => {
             let resource = ResourceArc::new(ModuleResource {
                 inner: Mutex::new(module),

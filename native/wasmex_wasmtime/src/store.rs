@@ -7,32 +7,29 @@ use wasi_common::WasiCtx;
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{Dir, WasiCtxBuilder};
 
-use crate::{atoms, pipe::PipeResource};
+use crate::{
+    atoms,
+    environment::{StoreOrCaller, StoreOrCallerResource, StoreOrCallerResourceResponse},
+    pipe::PipeResource,
+};
 
-pub enum WasmexStore {
-    Plain(Store<()>),
-    Wasi(Store<WasiCtx>),
+pub struct StoreData {
+    pub(crate) wasi: Option<WasiCtx>,
 }
 
 pub struct StoreResource {
-    pub inner: Mutex<WasmexStore>,
-}
-
-#[derive(NifTuple)]
-pub struct StoreResourceResponse {
-    ok: rustler::Atom,
-    resource: ResourceArc<StoreResource>,
+    pub inner: Mutex<Store<StoreData>>,
 }
 
 #[rustler::nif(name = "store_new")]
-pub fn new() -> NifResult<StoreResourceResponse> {
+pub fn new() -> NifResult<StoreOrCallerResourceResponse> {
     let config = Config::new();
     let engine = Engine::new(&config).map_err(|err| Error::Term(Box::new(err.to_string())))?;
-    let store = Store::new(&engine, ());
-    let resource = ResourceArc::new(StoreResource {
-        inner: Mutex::new(WasmexStore::Plain(store)),
+    let store = Store::new(&engine, StoreData { wasi: None });
+    let resource = ResourceArc::new(StoreOrCallerResource {
+        inner: Mutex::new(StoreOrCaller::Store(store)),
     });
-    Ok(StoreResourceResponse {
+    Ok(StoreOrCallerResourceResponse {
         ok: atoms::ok(),
         resource,
     })
@@ -44,7 +41,7 @@ pub fn new_wasi<'a>(
     wasi_args: ListIterator,
     wasi_env: MapIterator,
     options: Term<'a>,
-) -> NifResult<StoreResourceResponse> {
+) -> NifResult<StoreOrCallerResourceResponse> {
     let wasi_args = wasi_args
         .map(|term: Term| term.decode::<String>())
         .collect::<Result<Vec<String>, _>>()?;
@@ -69,11 +66,16 @@ pub fn new_wasi<'a>(
 
     let config = Config::new();
     let engine = Engine::new(&config).map_err(|err| Error::Term(Box::new(err.to_string())))?;
-    let store = Store::new(&engine, wasi_ctx_builder.build());
-    let resource = ResourceArc::new(StoreResource {
-        inner: Mutex::new(WasmexStore::Wasi(store)),
+    let store = Store::new(
+        &engine,
+        StoreData {
+            wasi: Some(wasi_ctx_builder.build()),
+        },
+    );
+    let resource = ResourceArc::new(StoreOrCallerResource {
+        inner: Mutex::new(StoreOrCaller::Store(store)),
     });
-    Ok(StoreResourceResponse {
+    Ok(StoreOrCallerResourceResponse {
         ok: atoms::ok(),
         resource,
     })

@@ -18,7 +18,7 @@ defmodule WasmexWasmtime.Native do
   def module_serialize(_module_resource), do: error()
   def module_unsafe_deserialize(_binary), do: error()
 
-  def instance_new(_store_resource, _module_resource, _imports), do: error()
+  def instance_new(_store_or_caller_resource, _module_resource, _imports), do: error()
 
   def instance_function_export_exists(_store_resource, _instance_resource, _function_name),
     do: error()
@@ -26,7 +26,7 @@ defmodule WasmexWasmtime.Native do
   def instance_receive_callback_result(_callback_token, _success, _params), do: error()
 
   def instance_call_exported_function(
-        _store_resource,
+        _store_or_caller_resource,
         _instance_resource,
         _function_name,
         _params,
@@ -38,8 +38,8 @@ defmodule WasmexWasmtime.Native do
   def memory_bytes_per_element(_size), do: error()
   def memory_length(_store_resource, _memory_resource), do: error()
   def memory_grow(_store_resource, _memory_resource, _pages), do: error()
-  def memory_get_byte(_store_resource, _memory_resource, _index), do: error()
-  def memory_set_byte(_store_resource, _memory_resource, _index, _value), do: error()
+  def memory_get_byte(_store_or_caller_resource, _memory_resource, _index), do: error()
+  def memory_set_byte(_store_or_caller_resource, _memory_resource, _index, _value), do: error()
   def memory_read_binary(_store_resource, _memory_resource, _index, _length), do: error()
   def memory_write_binary(_store_resource, _memory_resource, _index, _binary), do: error()
 

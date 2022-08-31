@@ -3,6 +3,8 @@ defmodule WasmexWasmtime.Store do
   TBD
   """
 
+  alias WasmexWasmtime.StoreOrCaller
+
   @type t :: %__MODULE__{
           resource: binary(),
           reference: reference()
@@ -29,7 +31,7 @@ defmodule WasmexWasmtime.Store do
   @spec new() :: {:error, reason :: binary()} | {:ok, __MODULE__.t()}
   def new() do
     case WasmexWasmtime.Native.store_new() do
-      {:ok, resource} -> {:ok, wrap_resource(resource)}
+      {:ok, resource} -> {:ok, StoreOrCaller.wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
   end
@@ -50,7 +52,7 @@ defmodule WasmexWasmtime.Store do
     {opts, _} = Map.split(wasi, ["stdin", "stdout", "stderr", "preopen"])
 
     case WasmexWasmtime.Native.store_new_wasi(args, env, opts) do
-      {:ok, resource} -> {:ok, wrap_resource(resource)}
+      {:ok, resource} -> {:ok, StoreOrCaller.wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end
   end

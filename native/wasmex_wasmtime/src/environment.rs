@@ -4,12 +4,16 @@ use rustler::{
     resource::ResourceArc, types::tuple, Atom, Encoder, Error, ListIterator, MapIterator, OwnedEnv,
     Term,
 };
-use wasmtime::{Caller, Extern, FuncType, Linker, Trap, Val, ValType};
+use wasmtime::{
+    AsContext, AsContextMut, Caller, Engine, Extern, FuncType, Linker, Store, Trap, Val, ValType,
+};
 
 use crate::{
-    atoms,
+    atoms::{self},
+    caller::{get_caller, remove_caller, set_caller},
     instance::{map_wasm_values_to_vals, WasmValue},
     memory::MemoryResource,
+    store::StoreData,
 };
 
 pub struct CallbackTokenResource {
@@ -22,7 +26,7 @@ pub struct CallbackToken {
     pub return_values: Mutex<Option<(bool, Vec<WasmValue>)>>,
 }
 
-pub fn link_imports<T>(linker: &mut Linker<T>, imports: MapIterator) -> Result<(), Error> {
+pub fn link_imports(linker: &mut Linker<StoreData>, imports: MapIterator) -> Result<(), Error> {
     for (namespace_name, namespace_definition) in imports {
         let namespace_name = namespace_name.decode::<String>()?;
         let definition: MapIterator = namespace_definition.decode()?;
@@ -35,8 +39,8 @@ pub fn link_imports<T>(linker: &mut Linker<T>, imports: MapIterator) -> Result<(
     Ok(())
 }
 
-fn link_import<T>(
-    linker: &mut Linker<T>,
+fn link_import(
+    linker: &mut Linker<StoreData>,
     namespace_name: &str,
     import_name: &str,
     definition: Term,
@@ -61,6 +65,57 @@ fn link_import<T>(
     Err(Error::Atom("unknown import type"))
 }
 
+pub enum StoreOrCaller {
+    Store(Store<StoreData>),
+    Caller(i32),
+}
+
+pub struct StoreOrCallerResource {
+    pub inner: Mutex<StoreOrCaller>,
+}
+
+#[derive(NifTuple)]
+pub struct StoreOrCallerResourceResponse {
+    pub(crate) ok: rustler::Atom,
+    pub(crate) resource: ResourceArc<StoreOrCallerResource>,
+}
+
+impl StoreOrCaller {
+    pub(crate) fn engine(&self) -> &Engine {
+        match self {
+            StoreOrCaller::Store(store) => store.engine(),
+            StoreOrCaller::Caller(token) => get_caller(*token).map(|c| &*c).unwrap().engine(),
+        }
+    }
+
+    pub(crate) fn data(&self) -> &StoreData {
+        match self {
+            StoreOrCaller::Store(store) => store.data(),
+            StoreOrCaller::Caller(token) => get_caller(*token).map(|c| &*c).unwrap().data(),
+        }
+    }
+}
+
+impl AsContext for StoreOrCaller {
+    type Data = StoreData;
+
+    fn as_context(&self) -> wasmtime::StoreContext<'_, Self::Data> {
+        match self {
+            StoreOrCaller::Store(store) => store.as_context(),
+            StoreOrCaller::Caller(token) => get_caller(*token).map(|c| &*c).unwrap().as_context(),
+        }
+    }
+}
+
+impl AsContextMut for StoreOrCaller {
+    fn as_context_mut(&mut self) -> wasmtime::StoreContextMut<'_, Self::Data> {
+        match self {
+            StoreOrCaller::Store(store) => store.as_context_mut(),
+            StoreOrCaller::Caller(token) => get_caller(*token).unwrap().as_context_mut(),
+        }
+    }
+}
+
 // Creates a wrapper function used in a WASM import object.
 // The `definition` term must contain a function signature matching the signature if the WASM import.
 // Once the imported function is called during WASM execution, the following happens:
@@ -71,8 +126,8 @@ fn link_import<T>(
 // 5. after the callback finished execution, return values are send back to Rust via `receive_callback_result`
 // 6. `receive_callback_result` saves the return values in the callback tokens mutex and signals the condvar,
 //    so that the original wrapper function can continue code execution
-fn link_imported_function<T>(
-    linker: &mut Linker<T>,
+fn link_imported_function(
+    linker: &mut Linker<StoreData>,
     namespace_name: String,
     import_name: String,
     definition: Term,
@@ -104,7 +159,7 @@ fn link_imported_function<T>(
             &namespace_name.clone(),
             &import_name.clone(),
             signature,
-            move |mut caller: Caller<'_, T>,
+            move |mut caller: Caller<'_, StoreData>,
                   params: &[Val],
                   results: &mut [Val]|
                   -> Result<(), Trap> {
@@ -120,6 +175,28 @@ fn link_imported_function<T>(
                     Some(Extern::Memory(mem)) => mem,
                     _ => return Err(Trap::new("failed to find host memory")),
                 };
+
+                // ============= works with original caller =============
+                let mut buffer = [0];
+                memory.read(&caller, 0, &mut buffer).unwrap();
+                println!("buffer 1: {:?}", buffer);
+                // ======================================================
+
+                
+                // ============= doesn't work with "copied" caller ======
+                let a = (std::ptr::addr_of!(caller)) as usize;
+                let b = a as *mut Caller<StoreData>;
+                let c = unsafe { &mut *b as &mut Caller<StoreData> };
+                memory
+                .read(c, 0, &mut buffer)
+                .unwrap();
+                println!("buffer 2: {:?}", buffer);
+                // thread '<unnamed>' panicked at 'object used with the wrong store',
+                // /Users/tessi/.cargo/registry/src/github.com-1ecc6299db9ec823/wasmtime-0.39.1/src/store/data.rs:258:5
+                // ======================================================
+
+
+                let caller_token = set_caller(&caller);
 
                 let mut msg_env = OwnedEnv::new();
                 msg_env.send_and_clear(&pid.clone(), |env| {
@@ -149,14 +226,24 @@ fn link_imported_function<T>(
                     let memory_resource = ResourceArc::new(MemoryResource {
                         inner: Mutex::new(memory),
                     });
-                    let callback_context = match Term::map_put(
+                    let callback_context = Term::map_put(
                         callback_context,
                         atoms::memory().encode(env),
                         memory_resource.encode(env),
-                    ) {
-                        Ok(map) => map,
-                        _ => unreachable!(),
-                    };
+                    )
+                    .unwrap();
+
+                    let caller_resource = ResourceArc::new(StoreOrCallerResource {
+                        inner: Mutex::new(StoreOrCaller::Caller(caller_token)),
+                    });
+
+                    let callback_context = Term::map_put(
+                        callback_context,
+                        atoms::caller().encode(env),
+                        caller_resource.encode(env),
+                    )
+                    .unwrap();
+
                     (
                         atoms::invoke_callback(),
                         namespace_name.clone(),
@@ -173,6 +260,7 @@ fn link_imported_function<T>(
                 while result.is_none() {
                     result = callback_token.token.continue_signal.wait(result).unwrap();
                 }
+                remove_caller(caller_token);
 
                 let result: &(bool, Vec<WasmValue>) = result
                     .as_ref()

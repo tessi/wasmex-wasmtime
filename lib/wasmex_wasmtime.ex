@@ -321,10 +321,12 @@ defmodule WasmexWasmtime do
         %{imports: imports} = state
       ) do
     context =
-      Map.put(
+      Map.merge(
         context,
-        :memory,
-        WasmexWasmtime.Memory.wrap_resource(Map.get(context, :memory))
+        %{
+          memory: WasmexWasmtime.Memory.wrap_resource(Map.get(context, :memory)),
+          caller: WasmexWasmtime.StoreOrCaller.wrap_resource(Map.get(context, :caller))
+        }
       )
 
     {success, return_value} =
