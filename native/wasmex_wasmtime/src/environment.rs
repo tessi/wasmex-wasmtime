@@ -182,18 +182,14 @@ fn link_imported_function(
                 println!("buffer 1: {:?}", buffer);
                 // ======================================================
 
-                
                 // ============= doesn't work with "copied" caller ======
                 let raw_ptr = &mut caller as *mut Caller<StoreData>;
                 let the_other_caller = unsafe { &mut *raw_ptr as &mut Caller<StoreData> };
-                memory
-                .read(the_other_caller, 0, &mut buffer)
-                .unwrap();
+                memory.read(the_other_caller, 0, &mut buffer).unwrap();
                 println!("buffer 2: {:?}", buffer);
                 // thread '<unnamed>' panicked at 'object used with the wrong store',
                 // /Users/tessi/.cargo/registry/src/github.com-1ecc6299db9ec823/wasmtime-0.39.1/src/store/data.rs:258:5
                 // ======================================================
-
 
                 let caller_token = set_caller(&caller);
 
