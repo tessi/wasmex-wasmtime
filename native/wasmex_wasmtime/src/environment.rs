@@ -184,11 +184,10 @@ fn link_imported_function(
 
                 
                 // ============= doesn't work with "copied" caller ======
-                let a = (std::ptr::addr_of!(caller)) as usize;
-                let b = a as *mut Caller<StoreData>;
-                let c = unsafe { &mut *b as &mut Caller<StoreData> };
+                let raw_ptr = &mut caller as *mut Caller<StoreData>;
+                let the_other_caller = unsafe { &mut *raw_ptr as &mut Caller<StoreData> };
                 memory
-                .read(c, 0, &mut buffer)
+                .read(the_other_caller, 0, &mut buffer)
                 .unwrap();
                 println!("buffer 2: {:?}", buffer);
                 // thread '<unnamed>' panicked at 'object used with the wrong store',
