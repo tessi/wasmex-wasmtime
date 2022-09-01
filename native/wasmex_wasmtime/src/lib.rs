@@ -52,6 +52,5 @@ fn on_load(env: Env, _info: Term) -> bool {
     rustler::resource!(memory::MemoryResource, env);
     rustler::resource!(module::ModuleResource, env);
     rustler::resource!(pipe::PipeResource, env);
-    rustler::resource!(store::StoreResource, env);
     true
 }

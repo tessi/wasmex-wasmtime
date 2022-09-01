@@ -17,10 +17,6 @@ pub struct StoreData {
     pub(crate) wasi: Option<WasiCtx>,
 }
 
-pub struct StoreResource {
-    pub inner: Mutex<Store<StoreData>>,
-}
-
 #[rustler::nif(name = "store_new")]
 pub fn new() -> NifResult<StoreOrCallerResourceResponse> {
     let config = Config::new();

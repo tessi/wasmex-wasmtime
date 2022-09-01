@@ -62,12 +62,17 @@ defmodule WasmexWasmtime.Instance do
     }
   end
 
-  @spec function_export_exists(WasmexWasmtime.Store.t(), __MODULE__.t(), binary()) :: boolean()
-  def function_export_exists(store, instance, name) when is_binary(name) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  @spec function_export_exists(WasmexWasmtime.StoreOrCaller.t(), __MODULE__.t(), binary()) ::
+          boolean()
+  def function_export_exists(store_or_caller, instance, name) when is_binary(name) do
+    %WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: instance_resource} = instance
 
-    WasmexWasmtime.Native.instance_function_export_exists(store_resource, instance_resource, name)
+    WasmexWasmtime.Native.instance_function_export_exists(
+      store_or_caller_resource,
+      instance_resource,
+      name
+    )
   end
 
   @doc """

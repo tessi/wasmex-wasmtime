@@ -122,26 +122,26 @@ defmodule WasmexWasmtime.Memory do
   Note that the WebAssembly memory consists of pages of 65kb each.
 
   ```elixir
-  {:ok, memory} = WasmexWasmtime.Memory.from_instance(store, instance)
-  WasmexWasmtime.Memory.length(store, memory) # 1114112 (17 * 65_536)
+  {:ok, memory} = WasmexWasmtime.Memory.from_instance(store_or_caller, instance)
+  WasmexWasmtime.Memory.length(store_or_caller, memory) # 1114112 (17 * 65_536)
   ```
   """
-  @spec length(WasmexWasmtime.Store.t(), t()) :: pos_integer()
-  def length(store, memory) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  @spec length(WasmexWasmtime.StoreOrCaller.t(), t()) :: pos_integer()
+  def length(store_or_caller, memory) do
+    %WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: memory_resource} = memory
-    WasmexWasmtime.Native.memory_length(store_resource, memory_resource)
+    WasmexWasmtime.Native.memory_length(store_or_caller_resource, memory_resource)
   end
 
   @doc """
   Grows the amount of available memory by the given number of pages and returns the number of previously available pages.
   Note that the maximum number of pages is `65_536`
   """
-  @spec grow(WasmexWasmtime.Store.t(), t(), pos_integer()) :: pos_integer()
-  def grow(store, memory, pages) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  @spec grow(WasmexWasmtime.StoreOrCaller.t(), t(), pos_integer()) :: pos_integer()
+  def grow(store_or_caller, memory, pages) do
+    %WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: memory_resource} = memory
-    WasmexWasmtime.Native.memory_grow(store_resource, memory_resource, pages)
+    WasmexWasmtime.Native.memory_grow(store_or_caller_resource, memory_resource, pages)
   end
 
   @spec get_byte(WasmexWasmtime.StoreOrCaller.t(), t(), non_neg_integer()) ::
@@ -163,29 +163,41 @@ defmodule WasmexWasmtime.Memory do
   end
 
   @spec write_binary(
-          WasmexWasmtime.Store.t(),
+          WasmexWasmtime.StoreOrCaller.t(),
           t(),
           non_neg_integer(),
           binary()
         ) ::
           :ok
-  def write_binary(store, memory, index, str) when is_binary(str) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  def write_binary(store_or_caller, memory, index, str) when is_binary(str) do
+    %WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: memory_resource} = memory
-    WasmexWasmtime.Native.memory_write_binary(store_resource, memory_resource, index, str)
+
+    WasmexWasmtime.Native.memory_write_binary(
+      store_or_caller_resource,
+      memory_resource,
+      index,
+      str
+    )
   end
 
   @spec read_binary(
-          WasmexWasmtime.Store.t(),
+          WasmexWasmtime.StoreOrCaller.t(),
           t(),
           non_neg_integer(),
           non_neg_integer()
         ) ::
           binary()
-  def read_binary(store, memory, index, length) do
-    %WasmexWasmtime.Store{resource: store_resource} = store
+  def read_binary(store_or_caller, memory, index, length) do
+    %WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource} = store_or_caller
     %__MODULE__{resource: memory_resource} = memory
-    WasmexWasmtime.Native.memory_read_binary(store_resource, memory_resource, index, length)
+
+    WasmexWasmtime.Native.memory_read_binary(
+      store_or_caller_resource,
+      memory_resource,
+      index,
+      length
+    )
   end
 
   @spec read_string(

@@ -36,9 +36,9 @@ defmodule WasmexWasmtime.Module do
   """
   @spec compile(WasmexWasmtime.StoreOrCaller.t(), binary()) ::
           {:ok, __MODULE__.t()} | {:error, binary()}
-  def compile(%WasmexWasmtime.StoreOrCaller{resource: store_resource}, bytes)
+  def compile(%WasmexWasmtime.StoreOrCaller{resource: store_or_caller_resource}, bytes)
       when is_binary(bytes) do
-    case WasmexWasmtime.Native.module_compile(store_resource, bytes) do
+    case WasmexWasmtime.Native.module_compile(store_or_caller_resource, bytes) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end

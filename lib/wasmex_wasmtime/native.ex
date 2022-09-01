@@ -11,7 +11,7 @@ defmodule WasmexWasmtime.Native do
     version: version,
     force_build: System.get_env("WASMEX_WASMTIME_BUILD") in ["1", "true"]
 
-  def module_compile(_store_resource, _bytes), do: error()
+  def module_compile(_store_or_caller_resource, _bytes), do: error()
   def module_exports(_module_resource), do: error()
   def module_imports(_module_resource), do: error()
   def module_name(_module_resource), do: error()
@@ -20,8 +20,12 @@ defmodule WasmexWasmtime.Native do
 
   def instance_new(_store_or_caller_resource, _module_resource, _imports), do: error()
 
-  def instance_function_export_exists(_store_resource, _instance_resource, _function_name),
-    do: error()
+  def instance_function_export_exists(
+        _store_or_caller_resource,
+        _instance_resource,
+        _function_name
+      ),
+      do: error()
 
   def instance_receive_callback_result(_callback_token, _success, _params), do: error()
 
