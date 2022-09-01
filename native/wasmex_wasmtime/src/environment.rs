@@ -10,7 +10,7 @@ use wasmtime::{
 
 use crate::{
     atoms::{self},
-    caller::{get_caller, remove_caller, set_caller},
+    caller::{get_caller, get_caller_mut, remove_caller, set_caller},
     instance::{map_wasm_values_to_vals, WasmValue},
     memory::MemoryResource,
     store::StoreData,
@@ -84,14 +84,14 @@ impl StoreOrCaller {
     pub(crate) fn engine(&self) -> &Engine {
         match self {
             StoreOrCaller::Store(store) => store.engine(),
-            StoreOrCaller::Caller(token) => get_caller(*token).map(|c| &*c).unwrap().engine(),
+            StoreOrCaller::Caller(token) => get_caller(&*token).map(|c| c).unwrap().engine(),
         }
     }
 
     pub(crate) fn data(&self) -> &StoreData {
         match self {
             StoreOrCaller::Store(store) => store.data(),
-            StoreOrCaller::Caller(token) => get_caller(*token).map(|c| &*c).unwrap().data(),
+            StoreOrCaller::Caller(token) => get_caller(&*token).map(|c| c).unwrap().data(),
         }
     }
 }
@@ -102,7 +102,7 @@ impl AsContext for StoreOrCaller {
     fn as_context(&self) -> wasmtime::StoreContext<'_, Self::Data> {
         match self {
             StoreOrCaller::Store(store) => store.as_context(),
-            StoreOrCaller::Caller(token) => get_caller(*token).map(|c| &*c).unwrap().as_context(),
+            StoreOrCaller::Caller(token) => get_caller(&*token).map(|c| c).unwrap().as_context(),
         }
     }
 }
@@ -111,7 +111,9 @@ impl AsContextMut for StoreOrCaller {
     fn as_context_mut(&mut self) -> wasmtime::StoreContextMut<'_, Self::Data> {
         match self {
             StoreOrCaller::Store(store) => store.as_context_mut(),
-            StoreOrCaller::Caller(token) => get_caller(*token).unwrap().as_context_mut(),
+            StoreOrCaller::Caller(token) => {
+                get_caller_mut(&*token).map(|c| c).unwrap().as_context_mut()
+            }
         }
     }
 }
@@ -176,22 +178,7 @@ fn link_imported_function(
                     _ => return Err(Trap::new("failed to find host memory")),
                 };
 
-                // ============= works with original caller =============
-                let mut buffer = [0];
-                memory.read(&caller, 0, &mut buffer).unwrap();
-                println!("buffer 1: {:?}", buffer);
-                // ======================================================
-
-                // ============= doesn't work with "copied" caller ======
-                let raw_ptr = &mut caller as *mut Caller<StoreData>;
-                let the_other_caller = unsafe { &mut *raw_ptr as &mut Caller<StoreData> };
-                memory.read(the_other_caller, 0, &mut buffer).unwrap();
-                println!("buffer 2: {:?}", buffer);
-                // thread '<unnamed>' panicked at 'object used with the wrong store',
-                // /Users/tessi/.cargo/registry/src/github.com-1ecc6299db9ec823/wasmtime-0.39.1/src/store/data.rs:258:5
-                // ======================================================
-
-                let caller_token = set_caller(&caller);
+                let caller_token = set_caller(caller);
 
                 let mut msg_env = OwnedEnv::new();
                 msg_env.send_and_clear(&pid.clone(), |env| {
@@ -238,7 +225,6 @@ fn link_imported_function(
                         caller_resource.encode(env),
                     )
                     .unwrap();
-
                     (
                         atoms::invoke_callback(),
                         namespace_name.clone(),

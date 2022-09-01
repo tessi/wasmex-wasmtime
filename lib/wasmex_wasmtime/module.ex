@@ -34,8 +34,10 @@ defmodule WasmexWasmtime.Module do
   may be a good idea to compile a module once and instantiate it often if you want to
   run a WASM binary multiple times.
   """
-  @spec compile(WasmexWasmtime.StoreOrCaller.t(), binary()) :: {:ok, __MODULE__.t()} | {:error, binary()}
-  def compile(%WasmexWasmtime.StoreOrCaller{resource: store_resource}, bytes) when is_binary(bytes) do
+  @spec compile(WasmexWasmtime.StoreOrCaller.t(), binary()) ::
+          {:ok, __MODULE__.t()} | {:error, binary()}
+  def compile(%WasmexWasmtime.StoreOrCaller{resource: store_resource}, bytes)
+      when is_binary(bytes) do
     case WasmexWasmtime.Native.module_compile(store_resource, bytes) do
       {:ok, resource} -> {:ok, wrap_resource(resource)}
       {:error, err} -> {:error, err}
