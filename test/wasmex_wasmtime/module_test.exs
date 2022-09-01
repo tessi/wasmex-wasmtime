@@ -16,7 +16,7 @@ defmodule WasmexWasmtime.ModuleTest do
     test "instantiates a simple module from wat" do
       {:ok, store} = WasmexWasmtime.Store.new()
       {:ok, module} = WasmexWasmtime.Module.compile(store, @wat)
-      instance = start_supervised!({WasmexWasmtime, %{module: module}})
+      instance = start_supervised!({WasmexWasmtime, %{module: module, store: store}})
       assert {:ok, [42]} == WasmexWasmtime.call_function(instance, :add_one, [41])
     end
 
@@ -64,7 +64,7 @@ defmodule WasmexWasmtime.ModuleTest do
         "i32_i32" => {:fn, [:i32], [:i32]},
         "i32_i64_f32_f64_f64" => {:fn, [:i32, :i64, :f32, :f64], [:f64]},
         "i64_i64" => {:fn, [:i64], [:i64]},
-        "memory" => {:memory, %{minimum: 17, shared: false}},
+        "memory" => {:memory, %{minimum: 17, shared: false, memory64: false}},
         "string" => {:fn, [], [:i32]},
         "string_first_byte" => {:fn, [:i32, :i32], [:i32]},
         "sum" => {:fn, [:i32, :i32], [:i32]},
@@ -183,7 +183,7 @@ defmodule WasmexWasmtime.ModuleTest do
 
       expected = %{
         "env" => %{
-          "MyMemory" => {:memory, %{maximum: 256, minimum: 256, shared: false}},
+          "MyMemory" => {:memory, %{maximum: 256, minimum: 256, shared: false, memory64: false}},
           "MyTable" => {:table, %{maximum: 10, minimum: 10, type: :func_ref}}
         },
         "global" => %{
