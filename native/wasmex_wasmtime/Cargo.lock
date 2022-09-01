@@ -233,7 +233,7 @@ version = "0.86.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "529ffacce2249ac60edba2941672dfedf3d96558b415d0d8083cd007456e0f55"
 dependencies = [
- "cranelift-entity",
+ "cranelift-entity 0.86.1",
 ]
 
 [[package]]
@@ -245,7 +245,7 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
- "cranelift-entity",
+ "cranelift-entity 0.86.1",
  "cranelift-isle",
  "gimli",
  "log",
@@ -274,6 +274,15 @@ name = "cranelift-entity"
 version = "0.86.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11aa8aa624c72cc1c94ea3d0739fa61248260b5b14d3646f51593a88d67f3e6e"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cranelift-entity"
+version = "0.87.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeced7874890fc25d85cacc5e626c4d67931c7c25aad1c2ad521684744c1ff5c"
 dependencies = [
  "serde",
 ]
@@ -314,13 +323,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5a8073a41efc173fd19bad3f725c170c705df6da999fc47a738ff310225dd63"
 dependencies = [
  "cranelift-codegen",
- "cranelift-entity",
+ "cranelift-entity 0.86.1",
  "cranelift-frontend",
  "itertools",
  "log",
  "smallvec",
- "wasmparser",
- "wasmtime-types",
+ "wasmparser 0.86.0",
+ "wasmtime-types 0.39.1",
 ]
 
 [[package]]
@@ -569,6 +578,9 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "heck"
@@ -807,6 +819,9 @@ version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
 dependencies = [
+ "crc32fast",
+ "hashbrown 0.12.3",
+ "indexmap",
  "memchr",
 ]
 
@@ -1314,7 +1329,7 @@ dependencies = [
  "rustix",
  "thiserror",
  "tracing",
- "wiggle",
+ "wiggle 0.39.1",
  "windows-sys",
 ]
 
@@ -1337,10 +1352,10 @@ dependencies = [
  "serde",
  "typetag",
  "wasi-common",
- "wasmtime",
+ "wasmtime 0.39.1",
  "wasmtime-wasi",
  "wat",
- "wiggle",
+ "wiggle 0.40.1",
 ]
 
 [[package]]
@@ -1348,6 +1363,15 @@ name = "wasmparser"
 version = "0.86.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bcbfe95447da2aa7ff171857fc8427513eb57c75a729bb190e974dc695e8f5c"
+dependencies = [
+ "indexmap",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.88.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb8cf7dd82407fe68161bedcd57fde15596f32ebf6e9b3bdbf3ae1da20e38e5e"
 dependencies = [
  "indexmap",
 ]
@@ -1375,15 +1399,49 @@ dependencies = [
  "region",
  "serde",
  "target-lexicon",
- "wasmparser",
+ "wasmparser 0.86.0",
  "wasmtime-cache",
  "wasmtime-cranelift",
- "wasmtime-environ",
+ "wasmtime-environ 0.39.1",
  "wasmtime-fiber",
- "wasmtime-jit",
- "wasmtime-runtime",
+ "wasmtime-jit 0.39.1",
+ "wasmtime-runtime 0.39.1",
  "wat",
  "windows-sys",
+]
+
+[[package]]
+name = "wasmtime"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a020a3f6587fa7a7d98a021156177735ebb07212a6239a85ab5f14b2f728508f"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "cfg-if",
+ "indexmap",
+ "libc",
+ "log",
+ "object 0.29.0",
+ "once_cell",
+ "paste",
+ "psm",
+ "serde",
+ "target-lexicon",
+ "wasmparser 0.88.0",
+ "wasmtime-environ 0.40.1",
+ "wasmtime-jit 0.40.1",
+ "wasmtime-runtime 0.40.1",
+ "windows-sys",
+]
+
+[[package]]
+name = "wasmtime-asm-macros"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fed4ada1fdd4d9a2aa37be652abcc31ae3188ad0efcefb4571ef4f785be2d777"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -1414,7 +1472,7 @@ checksum = "3302b33d919e8e33f1717d592c10c3cddccb318d0e1e0bef75178f579686ba94"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "cranelift-entity",
+ "cranelift-entity 0.86.1",
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
@@ -1424,8 +1482,8 @@ dependencies = [
  "object 0.28.4",
  "target-lexicon",
  "thiserror",
- "wasmparser",
- "wasmtime-environ",
+ "wasmparser 0.86.0",
+ "wasmtime-environ 0.39.1",
 ]
 
 [[package]]
@@ -1435,7 +1493,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c50fb925e8eaa9f8431f9b784ea89a13c703cb445ddfe51cb437596fc34e734"
 dependencies = [
  "anyhow",
- "cranelift-entity",
+ "cranelift-entity 0.86.1",
  "gimli",
  "indexmap",
  "log",
@@ -1444,8 +1502,27 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser",
- "wasmtime-types",
+ "wasmparser 0.86.0",
+ "wasmtime-types 0.39.1",
+]
+
+[[package]]
+name = "wasmtime-environ"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11086e573d2635a45ac0d44697a8e4586e058cf1b190f76bea466ca2ec36c30a"
+dependencies = [
+ "anyhow",
+ "cranelift-entity 0.87.1",
+ "gimli",
+ "indexmap",
+ "log",
+ "object 0.29.0",
+ "serde",
+ "target-lexicon",
+ "thiserror",
+ "wasmparser 0.88.0",
+ "wasmtime-types 0.40.1",
 ]
 
 [[package]]
@@ -1481,9 +1558,33 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmtime-environ",
- "wasmtime-jit-debug",
- "wasmtime-runtime",
+ "wasmtime-environ 0.39.1",
+ "wasmtime-jit-debug 0.39.1",
+ "wasmtime-runtime 0.39.1",
+ "windows-sys",
+]
+
+[[package]]
+name = "wasmtime-jit"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5444a78b74144718633f8642eccd7c4858f4c6f0c98ae6a3668998adf177ba2"
+dependencies = [
+ "addr2line",
+ "anyhow",
+ "bincode",
+ "cfg-if",
+ "cpp_demangle",
+ "gimli",
+ "log",
+ "object 0.29.0",
+ "rustc-demangle",
+ "rustix",
+ "serde",
+ "target-lexicon",
+ "thiserror",
+ "wasmtime-environ 0.40.1",
+ "wasmtime-runtime 0.40.1",
  "windows-sys",
 ]
 
@@ -1496,6 +1597,15 @@ dependencies = [
  "lazy_static",
  "object 0.28.4",
  "rustix",
+]
+
+[[package]]
+name = "wasmtime-jit-debug"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2bf6a667d2a29b2b0ed42bcf7564f00c595d92c24acb4d241c7c4d950b1910c"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]
@@ -1519,9 +1629,33 @@ dependencies = [
  "region",
  "rustix",
  "thiserror",
- "wasmtime-environ",
+ "wasmtime-environ 0.39.1",
  "wasmtime-fiber",
- "wasmtime-jit-debug",
+ "wasmtime-jit-debug 0.39.1",
+ "windows-sys",
+]
+
+[[package]]
+name = "wasmtime-runtime"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee064ce7b563cc201cdf3bb1cc4b233f386d8c57a96e55f4c4afe6103f4bd6a1"
+dependencies = [
+ "anyhow",
+ "cc",
+ "cfg-if",
+ "indexmap",
+ "libc",
+ "log",
+ "mach",
+ "memoffset",
+ "paste",
+ "rand",
+ "rustix",
+ "thiserror",
+ "wasmtime-asm-macros",
+ "wasmtime-environ 0.40.1",
+ "wasmtime-jit-debug 0.40.1",
  "windows-sys",
 ]
 
@@ -1531,10 +1665,22 @@ version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd7edc34f358fc290d12e326de81884422cb94cf74cc305b27979569875332d6"
 dependencies = [
- "cranelift-entity",
+ "cranelift-entity 0.86.1",
  "serde",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.86.0",
+]
+
+[[package]]
+name = "wasmtime-types"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01e104bd9e625181d53ead85910bbc0863aa5f0c6ef96836fe9a5cc65da11b69"
+dependencies = [
+ "cranelift-entity 0.87.1",
+ "serde",
+ "thiserror",
+ "wasmparser 0.88.0",
 ]
 
 [[package]]
@@ -1546,8 +1692,8 @@ dependencies = [
  "anyhow",
  "wasi-cap-std-sync",
  "wasi-common",
- "wasmtime",
- "wiggle",
+ "wasmtime 0.39.1",
+ "wiggle 0.39.1",
 ]
 
 [[package]]
@@ -1591,8 +1737,23 @@ dependencies = [
  "bitflags",
  "thiserror",
  "tracing",
- "wasmtime",
- "wiggle-macro",
+ "wasmtime 0.39.1",
+ "wiggle-macro 0.39.1",
+]
+
+[[package]]
+name = "wiggle"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e266fab4ce7f98cadf060650a081ac8f475c1392b841d05a6bb0c89e0e3e2d71"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitflags",
+ "thiserror",
+ "tracing",
+ "wasmtime 0.40.1",
+ "wiggle-macro 0.40.1",
  "witx",
 ]
 
@@ -1612,6 +1773,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "wiggle-generate"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3019da9c8d6e3ce0ce5ffec87b1872ec1af66383f7abb4c679655046322c4a06"
+dependencies = [
+ "anyhow",
+ "heck",
+ "proc-macro2",
+ "quote",
+ "shellexpand",
+ "syn",
+ "witx",
+]
+
+[[package]]
 name = "wiggle-macro"
 version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1620,7 +1796,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "wiggle-generate",
+ "wiggle-generate 0.39.1",
+]
+
+[[package]]
+name = "wiggle-macro"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4d32593742668375ab5badb889e92b6316036ca66a2b0ee09a0860e9c796d0c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "wiggle-generate 0.40.1",
 ]
 
 [[package]]
