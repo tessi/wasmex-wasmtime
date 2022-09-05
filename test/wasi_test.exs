@@ -104,14 +104,15 @@ defmodule WasiTest do
 
   test "file system access without preopened dirs" do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
-    wasi = %{args: ["list_files", "src"], stdout: stdout}
+    wasi = %{args: ["wasmex_wasmtime", "list_files", "src"], stdout: stdout}
 
     instance =
       start_supervised!(
-        {WasmexWasmtime, %{byes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
       )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+    WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) == "Could not find directory src\n"
   end
 
@@ -119,7 +120,7 @@ defmodule WasiTest do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
-      args: ["list_files", "test/wasi_test/src"],
+      args: ["wasmex_wasmtime", "list_files", "test/wasi_test/src"],
       stdout: stdout,
       preopen: %{"test/wasi_test/src": %{flags: [:read]}}
     }
@@ -128,6 +129,7 @@ defmodule WasiTest do
       start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+    WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
   end
 
@@ -135,7 +137,7 @@ defmodule WasiTest do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
-      args: ["list_files", "aliased_src"],
+      args: ["wasmex_wasmtime", "list_files", "aliased_src"],
       stdout: stdout,
       preopen: %{"test/wasi_test/src": %{flags: [:read], alias: "aliased_src"}}
     }
@@ -144,6 +146,7 @@ defmodule WasiTest do
       start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
+    WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) == "\"aliased_src/main.rs\"\n"
   end
 
@@ -151,7 +154,7 @@ defmodule WasiTest do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
-      args: ["read_file", "src/main.rs"],
+      args: ["wasmex_wasmtime", "read_file", "src/main.rs"],
       stdout: stdout,
       preopen: %{"test/wasi_test/src": %{flags: [:read], alias: "src"}}
     }
@@ -161,6 +164,7 @@ defmodule WasiTest do
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     {:ok, expected_content} = File.read("test/wasi_test/src/main.rs")
+    WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) == expected_content <> "\n"
   end
 
@@ -168,7 +172,7 @@ defmodule WasiTest do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
-      args: ["read_file", "src/main.rs"],
+      args: ["wasmex_wasmtime", "read_file", "src/main.rs"],
       stdout: stdout,
       preopen: %{"test/wasi_test/src": %{flags: [:create], alias: "src"}}
     }
@@ -178,6 +182,7 @@ defmodule WasiTest do
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
+    WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) ==
              "error: could not read file (Os { code: 2, kind: PermissionDenied, message: \"Permission denied\" })\n"
   end
