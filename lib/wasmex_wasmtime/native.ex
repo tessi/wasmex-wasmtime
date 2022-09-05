@@ -49,7 +49,7 @@ defmodule WasmexWasmtime.Native do
 
   def pipe_create(), do: error()
   def pipe_size(_pipe_resource), do: error()
-  def pipe_set_len(_pipe_resource, _len), do: error()
+  def pipe_seek(_pipe_resource, _pos_from_start), do: error()
   def pipe_read_binary(_pipe_resource), do: error()
   def pipe_write_binary(_pipe_resource, _binary), do: error()
 

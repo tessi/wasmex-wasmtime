@@ -43,12 +43,20 @@ defmodule WasmexWasmtime.Pipe do
     WasmexWasmtime.Native.pipe_size(resource)
   end
 
+  # @doc """
+  # Attempts to resize the pipe to the given number of bytes.
+  # """
+  # @spec set_len(__MODULE__.t(), integer()) :: :ok | :error
+  # def set_len(%__MODULE__{resource: resource}, len) do
+  #   WasmexWasmtime.Native.pipe_set_len(resource, len)
+  # end
+
   @doc """
-  Attempts to resize the pipe to the given number of bytes.
+  TBD
   """
-  @spec set_len(__MODULE__.t(), integer()) :: :ok | :error
-  def set_len(%__MODULE__{resource: resource}, len) do
-    WasmexWasmtime.Native.pipe_set_len(resource, len)
+  @spec seek(__MODULE__.t(), integer()) :: :ok | :error
+  def seek(%__MODULE__{resource: resource}, pos_from_start) do
+    WasmexWasmtime.Native.pipe_seek(resource, pos_from_start)
   end
 
   @doc """

@@ -10,7 +10,7 @@ use wasmtime_wasi::{Dir, WasiCtxBuilder};
 use crate::{
     atoms,
     environment::{StoreOrCaller, StoreOrCallerResource, StoreOrCallerResourceResponse},
-    pipe::PipeResource,
+    pipe::{PipeResource, Pipe},
 };
 
 pub struct StoreData {
@@ -48,7 +48,6 @@ pub fn new_wasi<'a>(
         })
         .collect::<Result<Vec<(String, String)>, _>>()?;
 
-    // let mut wasi_wasmer_env = create_wasi_env(wasi_args, wasi_env, options, env)?;
     let wasi_ctx_builder = WasiCtxBuilder::new()
         .args(&wasi_args)
         .map_err(|err| Error::Term(Box::new(err.to_string())))?
@@ -99,11 +98,11 @@ fn wasi_stdout(
     builder: WasiCtxBuilder,
 ) -> Result<WasiCtxBuilder, rustler::Error> {
     if let Ok(resource) = pipe_from_wasi_options(options, "stdout", &env) {
-        let pipe = resource.pipe.lock().map_err(|_e| {
+        let pipe: &Pipe = &*(resource.pipe.lock().map_err(|_e| {
             rustler::Error::Term(Box::new(
                 "Could not unlock resource as the mutex was poisoned.",
             ))
-        })?;
+        })?);
         return Ok(builder.stdout(Box::new(pipe.clone())));
     }
     Ok(builder)

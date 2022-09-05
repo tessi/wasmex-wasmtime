@@ -36,7 +36,7 @@ rustler::init! {
         module::unsafe_deserialize,
         pipe::create,
         pipe::read_binary,
-        pipe::set_len,
+        pipe::seek,
         pipe::size,
         pipe::write_binary,
         store::new,

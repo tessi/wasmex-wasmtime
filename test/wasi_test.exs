@@ -15,54 +15,45 @@ defmodule WasiTest do
     {dir, filename, Path.join(dir, filename)}
   end
 
-  test "calling a normal WASM module with WASI enabled errors as no WASI version can be detected" do
-    assert {:error,
-            {{:bad_return_value, {:error, "Could not create import object: UnknownWasiVersion"}},
-             _}} =
-             start_supervised(
-               {WasmexWasmtime, %{module: TestHelper.wasm_module(), imports: %{}, wasi: true}}
-             )
-  end
-
   test "running a WASM/WASI module while overriding some WASI methods" do
     imports = %{
       wasi_snapshot_preview1: %{
         clock_time_get:
           {:fn, [:i32, :i64, :i32], [:i32],
-           fn %{memory: memory}, _clock_id, _precision, time_ptr ->
+           fn %{memory: memory, caller: caller}, _clock_id, _precision, time_ptr ->
              # writes a time struct into memory representing 42 seconds since the epoch
 
              # 64-bit tv_sec
-             WasmexWasmtime.Memory.set(memory, time_ptr + 0, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 1, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 2, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 3, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 4, 10)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 5, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 6, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 7, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 0, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 1, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 2, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 3, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 4, 10)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 5, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 6, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 7, 0)
 
              # 64-bit n_sec
-             WasmexWasmtime.Memory.set(memory, time_ptr + 8, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 9, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 10, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 11, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 12, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 13, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 14, 0)
-             WasmexWasmtime.Memory.set(memory, time_ptr + 15, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 8, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 9, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 10, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 11, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 12, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 13, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 14, 0)
+             WasmexWasmtime.Memory.set_byte(caller, memory, time_ptr + 15, 0)
 
              0
            end},
         random_get:
           {:fn, [:i32, :i32], [:i32],
-           fn %{memory: memory}, address, size ->
+           fn %{memory: memory, caller: caller}, address, size ->
              Enum.each(0..size, fn index ->
-               WasmexWasmtime.Memory.set(memory, address + index, 0)
+               WasmexWasmtime.Memory.set_byte(caller, memory, address + index, 0)
              end)
 
              # randomly selected `4` with a fair dice roll
-             WasmexWasmtime.Memory.set(memory, address, 4)
+             WasmexWasmtime.Memory.set_byte(caller, memory, address, 4)
 
              0
            end}
@@ -84,17 +75,18 @@ defmodule WasiTest do
 
     instance =
       start_supervised!(
-        {WasmexWasmtime, %{module: TestHelper.wasi_module(), imports: imports, wasi: wasi}}
+        {WasmexWasmtime,
+         %{bytes: File.read!(TestHelper.wasi_test_file_path()), imports: imports, wasi: wasi}}
       )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
+    WasmexWasmtime.Pipe.seek(pipe, 0)
     assert WasmexWasmtime.Pipe.read(pipe) ==
              """
              Hello from the WASI test program!
 
              Arguments:
-             wasmex_wasmtime
              hello
              from elixir
 
@@ -115,7 +107,9 @@ defmodule WasiTest do
     wasi = %{args: ["list_files", "src"], stdout: stdout}
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{byes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     assert WasmexWasmtime.Pipe.read(stdout) == "Could not find directory src\n"
@@ -131,7 +125,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     assert WasmexWasmtime.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
@@ -147,7 +141,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     assert WasmexWasmtime.Pipe.read(stdout) == "\"aliased_src/main.rs\"\n"
@@ -163,7 +157,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     {:ok, expected_content} = File.read("test/wasi_test/src/main.rs")
@@ -180,7 +174,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -201,7 +195,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -224,7 +218,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -249,7 +243,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -271,7 +265,7 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{module: TestHelper.wasi_module(), wasi: wasi}})
+      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 

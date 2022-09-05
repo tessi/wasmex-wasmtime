@@ -57,9 +57,7 @@ pub fn new(
             )))
         })?);
 
-    // let data = &store_or_caller.data();
-    // let engine = store_or_caller.engine();
-    let instance = link_and_create_plain_instance(store_or_caller, &module, imports)?;
+    let instance = link_and_create_instance(store_or_caller, &module, imports)?;
     let resource = ResourceArc::new(InstanceResource {
         inner: Mutex::new(instance),
     });
@@ -69,7 +67,7 @@ pub fn new(
     })
 }
 
-fn link_and_create_plain_instance(
+fn link_and_create_instance(
     store_or_caller: &mut StoreOrCaller,
     module: &Module,
     imports: MapIterator,
@@ -78,7 +76,7 @@ fn link_and_create_plain_instance(
     if let Some(_wasi_ctx) = &store_or_caller.data().wasi {
         linker.allow_shadowing(true);
         wasmtime_wasi::add_to_linker(&mut linker, |s: &mut StoreData| s.wasi.as_mut().unwrap())
-            .map_err(|err| Error::Term(Box::new(err.to_string())))?;
+        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
     }
     link_imports(&mut linker, imports)?;
     linker

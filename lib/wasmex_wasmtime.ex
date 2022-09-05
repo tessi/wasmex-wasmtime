@@ -143,7 +143,7 @@ defmodule WasmexWasmtime do
 
   defp build_store(opts) do
     if Map.has_key?(opts, :wasi) do
-      WasmexWasmtime.Store.new_wasi(opts[:wasi])
+      WasmexWasmtime.Store.new_wasi(stringify_keys(opts[:wasi]))
     else
       WasmexWasmtime.Store.new()
     end

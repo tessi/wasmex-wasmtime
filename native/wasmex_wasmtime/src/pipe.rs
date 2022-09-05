@@ -2,12 +2,12 @@
 //! It can, for example, be used to replace stdin/stdout/stderr of a WASI module.
 
 use std::any::Any;
-use std::io::Write;
 use std::io::{self, Read, Seek};
+use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex, RwLock};
 
 use rustler::resource::ResourceArc;
-use rustler::{Atom, Encoder, Term};
+use rustler::{Encoder, Term};
 
 use wasi_common::file::{FdFlags, FileType};
 use wasi_common::Error;
@@ -18,24 +18,21 @@ use crate::atoms;
 /// For piping stdio. Stores all output / input in a byte-vector.
 #[derive(Debug, Default)]
 pub struct Pipe {
-    buffer: Arc<RwLock<Vec<u8>>>,
+    buffer: Arc<RwLock<Cursor<Vec<u8>>>>,
 }
 
 impl Pipe {
     pub fn new() -> Self {
         Self::default()
     }
-    fn borrow(&self) -> std::sync::RwLockWriteGuard<Vec<u8>> {
+    fn borrow(&self) -> std::sync::RwLockWriteGuard<Cursor<Vec<u8>>> {
         RwLock::write(&self.buffer).unwrap()
     }
 
     fn size(&self) -> u64 {
-        (*self.borrow()).len() as u64
-    }
-
-    fn set_len(&mut self, len: u64) {
-        let mut buffer = self.borrow();
-        buffer.resize(len as usize, 0);
+        self.borrow().get_ref().len() as u64;
+        let buffer = &*(self.borrow());
+        buffer.get_ref().len() as u64
     }
 }
 
@@ -49,32 +46,28 @@ impl Clone for Pipe {
 
 impl Read for Pipe {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut buffer = self.borrow();
-        let amt = std::cmp::min(buf.len(), buffer.len());
-        for (i, byte) in buffer.drain(..amt).enumerate() {
-            buf[i] = byte;
-        }
-        Ok(amt)
+        let buffer = &mut *(self.borrow());
+        let result = buffer.read(buf);
+        result
     }
 }
 
 impl Write for Pipe {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut buffer = self.borrow();
-        buffer.extend(buf);
-        Ok(buf.len())
+        let buffer = &mut *(self.borrow());
+        buffer.write(buf)
     }
+
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        let buffer = &mut *(self.borrow());
+        buffer.flush()
     }
 }
 
 impl Seek for Pipe {
-    fn seek(&mut self, _pos: io::SeekFrom) -> io::Result<u64> {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "can not seek in a pipe",
-        ))
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        let buffer = &mut *(self.borrow());
+        buffer.seek(pos)
     }
 }
 
@@ -85,10 +78,25 @@ impl WasiFile for Pipe {
     }
 
     async fn get_filetype(&mut self) -> Result<FileType, Error> {
-        Ok(FileType::Pipe)
+        Ok(FileType::Unknown)
     }
+
     async fn get_fdflags(&mut self) -> Result<FdFlags, Error> {
         Ok(FdFlags::APPEND)
+    }
+
+    async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
+        let buffer = &mut *(self.borrow());
+        buffer.write_vectored(bufs).map(|written| written as u64).map_err(|e| wasi_common::Error::from(e))
+    }
+
+    async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
+        let buffer = &mut *(self.borrow());
+        buffer.read_vectored(bufs).map(|read| read as u64).map_err(|e| wasi_common::Error::from(e))
+    }
+
+    fn isatty(&mut self) -> bool {
+        false
     }
 }
 
@@ -120,12 +128,11 @@ pub fn size(pipe_resource: ResourceArc<PipeResource>) -> u64 {
     pipe_resource.pipe.lock().unwrap().size()
 }
 
-#[rustler::nif(name = "pipe_set_len")]
-pub fn set_len(pipe_resource: ResourceArc<PipeResource>, len: u64) -> Atom {
-    let mut pipe = pipe_resource.pipe.lock().unwrap();
+#[rustler::nif(name = "pipe_seek")]
+pub fn seek(pipe_resource: ResourceArc<PipeResource>, pos: u64) -> rustler::NifResult<u64> {
+    let pipe: &mut Pipe = &mut *(pipe_resource.pipe.lock().unwrap());
 
-    pipe.set_len(len);
-    atoms::ok()
+    Seek::seek(pipe, io::SeekFrom::Start(pos)).map_err(|err| rustler::Error::Term(Box::new(err.to_string())))
 }
 
 #[rustler::nif(name = "pipe_read_binary")]
