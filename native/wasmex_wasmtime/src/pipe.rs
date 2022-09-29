@@ -30,7 +30,6 @@ impl Pipe {
     }
 
     fn size(&self) -> u64 {
-        self.borrow().get_ref().len() as u64;
         let buffer = &*(self.borrow());
         buffer.get_ref().len() as u64
     }
@@ -125,7 +124,8 @@ pub fn create() -> PipeResourceResponse {
 
 #[rustler::nif(name = "pipe_size")]
 pub fn size(pipe_resource: ResourceArc<PipeResource>) -> u64 {
-    pipe_resource.pipe.lock().unwrap().size()
+    let pipe: &Pipe = &*(pipe_resource.pipe.lock().unwrap());
+    pipe.size()
 }
 
 #[rustler::nif(name = "pipe_seek")]

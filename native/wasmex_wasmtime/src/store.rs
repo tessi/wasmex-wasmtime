@@ -5,12 +5,12 @@ use rustler::{
 use std::sync::Mutex;
 use wasi_common::WasiCtx;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::{Dir, WasiCtxBuilder};
+use wasmtime_wasi::WasiCtxBuilder;
 
 use crate::{
     atoms,
     environment::{StoreOrCaller, StoreOrCallerResource, StoreOrCallerResourceResponse},
-    pipe::{PipeResource, Pipe},
+    pipe::{Pipe, PipeResource},
 };
 
 pub struct StoreData {
@@ -58,13 +58,14 @@ pub fn new_wasi<'a>(
     let wasi_ctx_builder = wasi_stdout(options, env, wasi_ctx_builder)?;
     let wasi_ctx_builder = wasi_stderr(options, env, wasi_ctx_builder)?;
     let wasi_ctx_builder = wasi_preopen_directories(options, env, wasi_ctx_builder)?;
+    let wasi_ctx = wasi_ctx_builder.build();
 
     let config = Config::new();
     let engine = Engine::new(&config).map_err(|err| Error::Term(Box::new(err.to_string())))?;
     let store = Store::new(
         &engine,
         StoreData {
-            wasi: Some(wasi_ctx_builder.build()),
+            wasi: Some(wasi_ctx),
         },
     );
     let resource = ResourceArc::new(StoreOrCallerResource {

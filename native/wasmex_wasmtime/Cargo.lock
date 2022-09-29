@@ -1331,6 +1331,7 @@ dependencies = [
 name = "wasmex_wasmtime"
 version = "0.1.0"
 dependencies = [
+ "cap-primitives",
  "once_cell",
  "rand",
  "rustler",

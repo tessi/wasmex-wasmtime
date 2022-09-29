@@ -50,6 +50,12 @@ defmodule TestHelper do
     |> Enum.map(fn {k, v} -> {to_string(k), v} end)
     |> Enum.into(%{})
   end
+
+  defmacro ƒ(expr) do
+    quote do
+      inspect(unquote(expr))
+    end
+  end
 end
 
 TestHelper.precompile_wasm_files()

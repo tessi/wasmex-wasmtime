@@ -82,6 +82,7 @@ defmodule WasiTest do
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     WasmexWasmtime.Pipe.seek(pipe, 0)
+
     assert WasmexWasmtime.Pipe.read(pipe) ==
              """
              Hello from the WASI test program!
@@ -126,7 +127,9 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     WasmexWasmtime.Pipe.seek(stdout, 0)
@@ -143,7 +146,9 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     WasmexWasmtime.Pipe.seek(stdout, 0)
@@ -160,7 +165,9 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     {:ok, expected_content} = File.read("test/wasi_test/src/main.rs")
@@ -178,11 +185,14 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
     WasmexWasmtime.Pipe.seek(stdout, 0)
+
     assert WasmexWasmtime.Pipe.read(stdout) ==
              "error: could not read file (Os { code: 2, kind: PermissionDenied, message: \"Permission denied\" })\n"
   end
@@ -194,13 +204,15 @@ defmodule WasiTest do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
     wasi = %{
-      args: ["write_file", "src/#{filename}"],
+      args: ["wasmex_wasmtime", "write_file", "src/#{filename}"],
       stdout: stdout,
       preopen: %{dir => %{flags: [:write], alias: "src"}}
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -223,7 +235,9 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -248,7 +262,9 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
@@ -270,7 +286,9 @@ defmodule WasiTest do
     }
 
     instance =
-      start_supervised!({WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}})
+      start_supervised!(
+        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
+      )
 
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
 
