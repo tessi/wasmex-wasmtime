@@ -46,8 +46,7 @@ impl Clone for Pipe {
 impl Read for Pipe {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let buffer = &mut *(self.borrow());
-        let result = buffer.read(buf);
-        result
+        buffer.read(buf)
     }
 }
 
@@ -86,12 +85,18 @@ impl WasiFile for Pipe {
 
     async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let buffer = &mut *(self.borrow());
-        buffer.write_vectored(bufs).map(|written| written as u64).map_err(|e| wasi_common::Error::from(e))
+        buffer
+            .write_vectored(bufs)
+            .map(|written| written as u64)
+            .map_err(wasi_common::Error::from)
     }
 
     async fn read_vectored<'a>(&mut self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let buffer = &mut *(self.borrow());
-        buffer.read_vectored(bufs).map(|read| read as u64).map_err(|e| wasi_common::Error::from(e))
+        buffer
+            .read_vectored(bufs)
+            .map(|read| read as u64)
+            .map_err(wasi_common::Error::from)
     }
 
     fn isatty(&mut self) -> bool {
@@ -132,7 +137,8 @@ pub fn size(pipe_resource: ResourceArc<PipeResource>) -> u64 {
 pub fn seek(pipe_resource: ResourceArc<PipeResource>, pos: u64) -> rustler::NifResult<u64> {
     let pipe: &mut Pipe = &mut *(pipe_resource.pipe.lock().unwrap());
 
-    Seek::seek(pipe, io::SeekFrom::Start(pos)).map_err(|err| rustler::Error::Term(Box::new(err.to_string())))
+    Seek::seek(pipe, io::SeekFrom::Start(pos))
+        .map_err(|err| rustler::Error::Term(Box::new(err.to_string())))
 }
 
 #[rustler::nif(name = "pipe_read_binary")]

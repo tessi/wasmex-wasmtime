@@ -76,7 +76,7 @@ fn link_and_create_instance(
     if let Some(_wasi_ctx) = &store_or_caller.data().wasi {
         linker.allow_shadowing(true);
         wasmtime_wasi::add_to_linker(&mut linker, |s: &mut StoreData| s.wasi.as_mut().unwrap())
-        .map_err(|err| Error::Term(Box::new(err.to_string())))?;
+            .map_err(|err| Error::Term(Box::new(err.to_string())))?;
     }
     link_imports(&mut linker, imports)?;
     linker

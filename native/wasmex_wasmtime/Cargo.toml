@@ -21,8 +21,12 @@ once_cell = "1.15.0"
 rand = "0.8.5"
 serde = "1.0.145"
 typetag = "0.2.3"
-wasmtime = "1.0.1"
-wasmtime-wasi = "1.0.1"
-wasi-common = "1.0.1"
-wiggle = "1.0.1"
+# wasmtime = "1.0.1"
+wasmtime = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
+# wasmtime-wasi = "1.0.1"
+wasmtime-wasi = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
+# wasi-common = "1.0.1"
+wasi-common = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
+# wiggle = "1.0.1"
+wiggle = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
 wat = "1.0.49"

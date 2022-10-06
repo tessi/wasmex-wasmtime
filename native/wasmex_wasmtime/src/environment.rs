@@ -84,14 +84,14 @@ impl StoreOrCaller {
     pub(crate) fn engine(&self) -> &Engine {
         match self {
             StoreOrCaller::Store(store) => store.engine(),
-            StoreOrCaller::Caller(token) => get_caller(&*token).map(|c| c).unwrap().engine(),
+            StoreOrCaller::Caller(token) => get_caller(token).unwrap().engine(),
         }
     }
 
     pub(crate) fn data(&self) -> &StoreData {
         match self {
             StoreOrCaller::Store(store) => store.data(),
-            StoreOrCaller::Caller(token) => get_caller(&*token).map(|c| c).unwrap().data(),
+            StoreOrCaller::Caller(token) => get_caller(token).unwrap().data(),
         }
     }
 }
@@ -102,7 +102,7 @@ impl AsContext for StoreOrCaller {
     fn as_context(&self) -> wasmtime::StoreContext<'_, Self::Data> {
         match self {
             StoreOrCaller::Store(store) => store.as_context(),
-            StoreOrCaller::Caller(token) => get_caller(&*token).map(|c| c).unwrap().as_context(),
+            StoreOrCaller::Caller(token) => get_caller(token).unwrap().as_context(),
         }
     }
 }
@@ -111,9 +111,7 @@ impl AsContextMut for StoreOrCaller {
     fn as_context_mut(&mut self) -> wasmtime::StoreContextMut<'_, Self::Data> {
         match self {
             StoreOrCaller::Store(store) => store.as_context_mut(),
-            StoreOrCaller::Caller(token) => {
-                get_caller_mut(&*token).map(|c| c).unwrap().as_context_mut()
-            }
+            StoreOrCaller::Caller(token) => get_caller_mut(token).unwrap().as_context_mut(),
         }
     }
 }
