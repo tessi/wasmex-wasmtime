@@ -109,7 +109,7 @@ defmodule WasmexWasmtime.Instance do
     )
   end
 
-  @spec memory(WasmexWasmtime.Store.t(), __MODULE__.t()) ::
+  @spec memory(WasmexWasmtime.StoreOrCaller.t(), __MODULE__.t()) ::
           {:ok, WasmexWasmtime.Memory.t()} | {:error, binary()}
   def memory(store, instance) do
     WasmexWasmtime.Memory.from_instance(store, instance)

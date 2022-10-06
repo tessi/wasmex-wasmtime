@@ -201,7 +201,7 @@ defmodule WasmexWasmtime.Memory do
   end
 
   @spec read_string(
-          WasmexWasmtime.Store.t(),
+          WasmexWasmtime.StoreOrCaller.t(),
           t(),
           non_neg_integer(),
           non_neg_integer()
