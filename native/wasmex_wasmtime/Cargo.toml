@@ -29,4 +29,4 @@ wasmtime-wasi = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
 wasi-common = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
 # wiggle = "1.0.1"
 wiggle = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
-wat = "1.0.49"
+wat = "1.0.52"
