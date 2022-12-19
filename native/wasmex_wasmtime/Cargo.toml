@@ -20,7 +20,7 @@ rustler = "0.26.0"
 once_cell = "1.15.0"
 rand = "0.8.5"
 serde = "1.0.145"
-typetag = "0.2.3"
+typetag = "0.2.4"
 # wasmtime = "1.0.1"
 wasmtime = { git = "https://github.com/tessi/wasmtime", version = "3.0.0"}
 # wasmtime-wasi = "1.0.1"
