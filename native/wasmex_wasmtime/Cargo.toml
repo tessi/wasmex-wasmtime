@@ -15,7 +15,7 @@ path = "src/lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
-cap-primitives = "0.26.0"
+cap-primitives = "1.0.3"
 rustler = "0.26.0"
 once_cell = "1.15.0"
 rand = "0.8.5"
