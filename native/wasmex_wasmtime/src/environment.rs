@@ -5,8 +5,9 @@ use rustler::{
     Term,
 };
 use wasmtime::{
-    AsContext, AsContextMut, Caller, Engine, Extern, FuncType, Linker, Store, Trap, Val, ValType,
+    AsContext, AsContextMut, Caller, Engine, Extern, FuncType, Linker, Store, Val, ValType,
 };
+use wiggle::anyhow::{self, anyhow};
 
 use crate::{
     atoms::{self},
@@ -162,7 +163,7 @@ fn link_imported_function(
             move |mut caller: Caller<'_, StoreData>,
                   params: &[Val],
                   results: &mut [Val]|
-                  -> Result<(), Trap> {
+                  -> Result<(), anyhow::Error> {
                 let callback_token = ResourceArc::new(CallbackTokenResource {
                     token: CallbackToken {
                         continue_signal: Condvar::new(),
@@ -173,7 +174,7 @@ fn link_imported_function(
 
                 let memory = match caller.get_export("memory") {
                     Some(Extern::Memory(mem)) => mem,
-                    _ => return Err(Trap::new("failed to find host memory")),
+                    _ => return Err(anyhow!("failed to find host memory")),
                 };
 
                 let caller_token = set_caller(caller);
@@ -246,7 +247,7 @@ fn link_imported_function(
                     .expect("expect callback token to contain a result");
                 match result {
                     (true, return_values) => write_results(results, return_values),
-                    (false, _) => Err(Trap::new("the elixir callback threw an exception")),
+                    (false, _) => Err(anyhow!("the elixir callback threw an exception")),
                 }
             },
         )
@@ -255,7 +256,7 @@ fn link_imported_function(
     Ok(())
 }
 
-fn write_results(results: &mut [Val], return_values: &[WasmValue]) -> Result<(), Trap> {
+fn write_results(results: &mut [Val], return_values: &[WasmValue]) -> Result<(), anyhow::Error> {
     results.clone_from_slice(&map_wasm_values_to_vals(return_values));
     Ok(())
 }

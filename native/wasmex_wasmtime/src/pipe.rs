@@ -129,13 +129,13 @@ pub fn create() -> PipeResourceResponse {
 
 #[rustler::nif(name = "pipe_size")]
 pub fn size(pipe_resource: ResourceArc<PipeResource>) -> u64 {
-    let pipe: &Pipe = &*(pipe_resource.pipe.lock().unwrap());
+    let pipe: &Pipe = &pipe_resource.pipe.lock().unwrap();
     pipe.size()
 }
 
 #[rustler::nif(name = "pipe_seek")]
 pub fn seek(pipe_resource: ResourceArc<PipeResource>, pos: u64) -> rustler::NifResult<u64> {
-    let pipe: &mut Pipe = &mut *(pipe_resource.pipe.lock().unwrap());
+    let pipe: &mut Pipe = &mut pipe_resource.pipe.lock().unwrap();
 
     Seek::seek(pipe, io::SeekFrom::Start(pos))
         .map_err(|err| rustler::Error::Term(Box::new(err.to_string())))

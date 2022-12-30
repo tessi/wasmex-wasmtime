@@ -4,6 +4,7 @@ defmodule WasmexWasmtime.Store do
   """
 
   alias WasmexWasmtime.StoreOrCaller
+  alias WasmexWasmtime.Wasi.WasiOptions
 
   @doc """
   TBD
@@ -19,19 +20,9 @@ defmodule WasmexWasmtime.Store do
   @doc """
   TBD
   """
-  @spec new_wasi(%{
-          optional(:args) => [String.t()],
-          optional(:env) => %{String.t() => String.t()},
-          optional(:stdin) => WasmexWasmtime.Pipe.t(),
-          optional(:stdout) => WasmexWasmtime.Pipe.t(),
-          optional(:stderr) => WasmexWasmtime.Pipe.t()
-        }) :: {:error, reason :: binary()} | {:ok, StoreOrCaller.t()}
-  def new_wasi(wasi) when is_map(wasi) do
-    args = Map.get(wasi, "args", [])
-    env = Map.get(wasi, "env", %{})
-    {opts, _} = Map.split(wasi, ["stdin", "stdout", "stderr", "preopen"])
-
-    case WasmexWasmtime.Native.store_new_wasi(args, env, opts) do
+  @spec new_wasi(WasiOptions.t()) :: {:error, reason :: binary()} | {:ok, StoreOrCaller.t()}
+  def new_wasi(%WasiOptions{} = options) do
+    case WasmexWasmtime.Native.store_new_wasi(options) do
       {:ok, resource} -> {:ok, StoreOrCaller.wrap_resource(resource)}
       {:error, err} -> {:error, err}
     end

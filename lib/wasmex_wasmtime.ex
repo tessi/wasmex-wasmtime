@@ -85,26 +85,22 @@ defmodule WasmexWasmtime do
   or file system access.
   These can be provided by giving a `wasi` map:
 
-      wasi = %{
+      wasi = %Wasmex.Wasi.WasiOptions{
         args: ["hello", "from elixir"],
         env: %{
           "A_NAME_MAPS" => "to a value",
           "THE_TEST_WASI_FILE" => "prints all environment variables"
         },
-        preopen: %{"wasi_logfiles": %{flags: [:write, :create], alias: "log"}}
+        preopen: [%Wasmex.Wasi.PreopenOption{path: "logfile", alias: "log"}]
       }
       {:ok, instance } = WasmexWasmtime.start_link(%{module: module, wasi: wasi})
-
-  The `preopen` map takes directory paths as keys and settings map as values.
-  Settings must specify the access map with one or more of `:create`, `:read`, `:write`.
-  Optionally, the directory can be given another name in the WASI program using `alias`.
 
   It is also possible to capture stdout, stdin, or stderr of a WASI program using pipes:
 
       {:ok, stdin} = WasmexWasmtime.Pipe.create()
       {:ok, stdout} = WasmexWasmtime.Pipe.create()
       {:ok, stderr} = WasmexWasmtime.Pipe.create()
-      wasi = %{
+      wasi = %Wasmex.Wasi.WasiOptions{
         stdin: stdin,
         stdout: stdout,
         stderr: stderr
@@ -120,7 +116,8 @@ defmodule WasmexWasmtime do
   def start_link(%{} = opts) when is_map_key(opts, :module) and not is_map_key(opts, :store),
     do: {:error, :must_specify_store_used_to_compile_module}
 
-  def start_link(%{wasi: true} = opts), do: start_link(Map.merge(opts, %{wasi: %{}}))
+  def start_link(%{wasi: true} = opts),
+    do: start_link(Map.merge(opts, %{wasi: %WasmexWasmtime.Wasi.WasiOptions{}}))
 
   def start_link(%{bytes: bytes} = opts) do
     with {:ok, store} <- build_store(opts),

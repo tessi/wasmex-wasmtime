@@ -2,6 +2,9 @@ defmodule WasiTest do
   use ExUnit.Case, async: true
   doctest WasmexWasmtime
 
+  alias WasmexWasmtime.Wasi.PreopenOptions
+  alias WasmexWasmtime.Wasi.WasiOptions
+
   def tmp_file_path(suffix) do
     dir = System.tmp_dir!()
 
@@ -62,7 +65,7 @@ defmodule WasiTest do
 
     {:ok, pipe} = WasmexWasmtime.Pipe.create()
 
-    wasi = %{
+    wasi = %WasiOptions{
       args: ["hello", "from elixir"],
       env: %{
         "A_NAME_MAPS" => "to a value",
@@ -105,7 +108,7 @@ defmodule WasiTest do
 
   test "file system access without preopened dirs" do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
-    wasi = %{args: ["wasmex_wasmtime", "list_files", "src"], stdout: stdout}
+    wasi = %WasiOptions{args: ["wasmex_wasmtime", "list_files", "src"], stdout: stdout}
 
     instance =
       start_supervised!(
@@ -117,32 +120,13 @@ defmodule WasiTest do
     assert WasmexWasmtime.Pipe.read(stdout) == "Could not find directory src\n"
   end
 
-  test "list files on a preopened dir with minimal permissions" do
-    {:ok, stdout} = WasmexWasmtime.Pipe.create()
-
-    wasi = %{
-      args: ["wasmex_wasmtime", "list_files", "test/wasi_test/src"],
-      stdout: stdout,
-      preopen: %{"test/wasi_test/src": %{dir_caps: [:open, :readdir]}}
-    }
-
-    instance =
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
-    WasmexWasmtime.Pipe.seek(stdout, 0)
-    assert WasmexWasmtime.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
-  end
-
   test "list files on a preopened dir with all permissions" do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
-    wasi = %{
+    wasi = %WasiOptions{
       args: ["wasmex_wasmtime", "list_files", "test/wasi_test/src"],
       stdout: stdout,
-      preopen: %{"test/wasi_test/src": %{dir_caps: :all, file_caps: :all}}
+      preopen: [%PreopenOptions{path: "test/wasi_test/src"}]
     }
 
     instance =
@@ -153,34 +137,15 @@ defmodule WasiTest do
     {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
     WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) == "\"test/wasi_test/src/main.rs\"\n"
-  end
-
-  test "list files on a preopened dir without permissions" do
-    {:ok, stdout} = WasmexWasmtime.Pipe.create()
-
-    wasi = %{
-      args: ["wasmex_wasmtime", "list_files", "test/wasi_test/src"],
-      stdout: stdout,
-      preopen: %{"test/wasi_test/src": %{}}
-    }
-
-    instance =
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
-    WasmexWasmtime.Pipe.seek(stdout, 0)
-    assert WasmexWasmtime.Pipe.read(stdout) == "Could not find directory test/wasi_test/src\n"
   end
 
   test "list files on a preopened dir with alias" do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
-    wasi = %{
+    wasi = %WasiOptions{
       args: ["wasmex_wasmtime", "list_files", "aliased_src"],
       stdout: stdout,
-      preopen: %{"test/wasi_test/src": %{dir_caps: [:open, :readdir], alias: "aliased_src"}}
+      preopen: [%PreopenOptions{path: "test/wasi_test/src", alias: "aliased_src"}]
     }
 
     instance =
@@ -196,10 +161,10 @@ defmodule WasiTest do
   test "read a file on a preopened dir" do
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
-    wasi = %{
+    wasi = %WasiOptions{
       args: ["wasmex_wasmtime", "read_file", "src/main.rs"],
       stdout: stdout,
-      preopen: %{"test/wasi_test/src": %{dir_caps: [:open], file_caps: [:read], alias: "src"}}
+      preopen: [%PreopenOptions{path: "test/wasi_test/src", alias: "src"}]
     }
 
     instance =
@@ -213,36 +178,16 @@ defmodule WasiTest do
     assert WasmexWasmtime.Pipe.read(stdout) == expected_content <> "\n"
   end
 
-  test "attempt to read a file without read permission" do
-    {:ok, stdout} = WasmexWasmtime.Pipe.create()
-
-    wasi = %{
-      args: ["wasmex_wasmtime", "read_file", "src/main.rs"],
-      stdout: stdout,
-      preopen: %{"test/wasi_test/src": %{dir_caps: [:open], file_caps: [:write], alias: "src"}}
-    }
-
-    instance =
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
-
-    WasmexWasmtime.Pipe.seek(stdout, 0)
-    assert "error: could not read file" <> _ = WasmexWasmtime.Pipe.read(stdout)
-  end
-
   test "write a file on a preopened dir" do
     {dir, filename, filepath} = tmp_file_path("write_file")
     File.write!(filepath, "existing content\n")
 
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
-    wasi = %{
+    wasi = %WasiOptions{
       args: ["wasmex_wasmtime", "write_file", "src/#{filename}"],
       stdout: stdout,
-      preopen: %{dir => %{dir_caps: [:open, :create_file], file_caps: [:write], alias: "src"}}
+      preopen: [%PreopenOptions{path: dir, alias: "src"}]
     }
 
     instance =
@@ -261,43 +206,15 @@ defmodule WasiTest do
     File.rm!(filepath)
   end
 
-  test "write a file on a preopened dir without permission" do
-    {dir, filename, filepath} = tmp_file_path("write_file_no_permission")
-    File.write!(filepath, "existing content\n")
-
-    {:ok, stdout} = WasmexWasmtime.Pipe.create()
-
-    wasi = %{
-      args: ["wasmex_wasmtime", "write_file", "src/#{filename}"],
-      stdout: stdout,
-      preopen: %{dir => %{alias: "src"}}
-    }
-
-    instance =
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
-
-    {:ok, file_contents} = File.read(filepath)
-    assert "existing content\n" == file_contents
-
-    WasmexWasmtime.Pipe.seek(stdout, 0)
-    assert "error: could not write file" <> _ = WasmexWasmtime.Pipe.read(stdout)
-
-    File.rm!(filepath)
-  end
-
   test "create a file on a preopened dir" do
     {dir, filename, filepath} = tmp_file_path("create_file")
 
     {:ok, stdout} = WasmexWasmtime.Pipe.create()
 
-    wasi = %{
+    wasi = %WasiOptions{
       args: ["wasmex_wasmtime", "create_file", "src/#{filename}"],
       stdout: stdout,
-      preopen: %{dir => %{dir_caps: [:create_file, :open], file_caps: [:write], alias: "src"}}
+      preopen: [%PreopenOptions{path: dir, alias: "src"}]
     }
 
     instance =
@@ -313,97 +230,5 @@ defmodule WasiTest do
     WasmexWasmtime.Pipe.seek(stdout, 0)
     assert WasmexWasmtime.Pipe.read(stdout) == ""
     File.rm!(filepath)
-  end
-
-  test "create a file on a preopened dir without permission" do
-    {dir, filename, filepath} = tmp_file_path("create_file")
-
-    {:ok, stdout} = WasmexWasmtime.Pipe.create()
-
-    wasi = %{
-      args: ["wasmex_wasmtime", "create_file", "src/#{filename}"],
-      stdout: stdout,
-      preopen: %{dir => %{dir_caps: [:open], file_caps: [:write], alias: "src"}}
-    }
-
-    instance =
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-    {:ok, _} = WasmexWasmtime.call_function(instance, :_start, [])
-
-    {:error, :enoent} = File.read(filepath)
-
-    WasmexWasmtime.Pipe.seek(stdout, 0)
-    assert "error: could not write file" <> _ = WasmexWasmtime.Pipe.read(stdout)
-  end
-
-  test "fails to start genserver with invalid directory capability" do
-    wasi = %{
-      preopen: %{"." => %{dir_caps: :nonsense}}
-    }
-
-    try do
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-      refute "expected to fail because :nonsense is not a valid dir_cap"
-    rescue
-      e in RuntimeError ->
-        assert String.contains?(e.message, "unknown directory capability must be a list or :all")
-    end
-  end
-
-  test "fails to start genserver with invalid directory capability term in list" do
-    wasi = %{
-      preopen: %{"." => %{dir_caps: [:nonsense]}}
-    }
-
-    try do
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-      refute "expected to fail because :nonsense is not a valid dir_cap"
-    rescue
-      e in RuntimeError ->
-        assert String.contains?(e.message, "unknown directory capability term: nonsense")
-    end
-  end
-
-  test "fails to start genserver with invalid file capability" do
-    wasi = %{
-      preopen: %{"." => %{file_caps: :nonsense}}
-    }
-
-    try do
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-      refute "expected to fail because :nonsense is not a valid dir_cap"
-    rescue
-      e in RuntimeError ->
-        assert String.contains?(e.message, "unknown file capability must be a list or :all")
-    end
-  end
-
-  test "fails to start genserver with invalid file capability term in list" do
-    wasi = %{
-      preopen: %{"." => %{file_caps: [:nonsense]}}
-    }
-
-    try do
-      start_supervised!(
-        {WasmexWasmtime, %{bytes: File.read!(TestHelper.wasi_test_file_path()), wasi: wasi}}
-      )
-
-      refute "expected to fail because :nonsense is not a valid dir_cap"
-    rescue
-      e in RuntimeError ->
-        assert String.contains?(e.message, "unknown file capability term: nonsense")
-    end
   end
 end

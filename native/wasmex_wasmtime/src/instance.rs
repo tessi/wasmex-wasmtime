@@ -158,7 +158,7 @@ fn execute_function(
     };
     let instance: Instance = *(instance_resource.inner.lock().unwrap());
     let mut store_or_caller = store_or_caller_resource.inner.lock().unwrap();
-    let function_result = functions::find(&instance, &mut *store_or_caller, &function_name);
+    let function_result = functions::find(&instance, &mut store_or_caller, &function_name);
     let function = match function_result {
         Some(func) => func,
         None => {

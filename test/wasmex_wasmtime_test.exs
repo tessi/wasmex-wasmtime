@@ -244,7 +244,7 @@ defmodule WasmexWasmtimeTest do
                WasmexWasmtime.call_function(instance, "using_imported_sum3", [1, 2, 3])
 
       assert reason =~
-               "Error during function excecution: `the elixir callback threw an exception"
+               "Error during function excecution: `error while executing at wasm backtrace:\n    0:  0x12e - <unknown>!using_imported_sum3"
     end
   end
 end
